@@ -251,7 +251,9 @@ function CrudTable({
                 >
                   {visibleFields.map(f => (
                     <TableCell key={f.key}>
-                      {f.type === 'select' && f.options
+                      {f.type === 'image' && row[f.key]
+                        ? <img src={row[f.key]} alt="" className="h-8 w-auto object-contain" />
+                        : f.type === 'select' && f.options
                         ? <Badge variant={row[f.key] === 'active' || row[f.key] === 'complete' ? 'default' : 'secondary'}>
                             {f.options.find(o => o.value === row[f.key])?.label ?? row[f.key]}
                           </Badge>
@@ -334,6 +336,7 @@ const developerFields: Field[] = [
   { key: 'county', label: 'County', required: true },
   { key: 'post_code', label: 'Post Code', required: true },
   { key: 'website', label: 'Website' },
+  { key: 'logo_url', label: 'Logo', type: 'image' },
 ];
 
 const siteFields: Field[] = [
