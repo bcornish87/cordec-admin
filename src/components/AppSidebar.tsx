@@ -1,6 +1,7 @@
 import {
   Building2, ClipboardList, Smartphone, Contact, LogOut
 } from 'lucide-react';
+import cordecLogo from '@/assets/cordec-logo.png';
 import { NavLink } from '@/components/NavLink';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -26,8 +27,11 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-sidebar-foreground/60 text-xs uppercase tracking-wider">
-            {!collapsed && 'Cordec Admin'}
+          <SidebarGroupLabel className="flex items-center justify-center py-4 mb-2">
+            {collapsed
+              ? <span className="text-sidebar-foreground font-bold text-lg">C.</span>
+              : <img src={cordecLogo} alt="Cordec" className="h-8 w-auto" />
+            }
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
