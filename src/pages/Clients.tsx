@@ -7,16 +7,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Pencil, Trash2, Search, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, ChevronRight, ArrowLeft, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+
+const SUPABASE_URL = 'https://xhqornncpcgewlbzutsd.supabase.co';
 
 /* ───── tiny generic CRUD table (inlined to keep things self-contained) ───── */
 
 interface Field {
   key: string;
   label: string;
-  type?: 'text' | 'email' | 'tel' | 'number' | 'select';
+  type?: 'text' | 'email' | 'tel' | 'number' | 'select' | 'image';
   options?: { value: string; label: string }[];
   required?: boolean;
   foreignTable?: string;
