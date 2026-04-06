@@ -4,7 +4,7 @@ const fields: FieldConfig[] = [
   { key: 'name', label: 'Name', required: true },
   { key: 'phone', label: 'Phone', type: 'tel' },
   { key: 'email', label: 'Email', type: 'email' },
-  { key: 'role', label: 'Role', type: 'select', options: [
+  { key: 'role', label: 'Role', type: 'select', required: true, options: [
     { value: 'decorator', label: 'Decorator' },
     { value: 'supervisor', label: 'Supervisor' },
   ]},
