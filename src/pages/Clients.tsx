@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import { EntityPage, Breadcrumbs, FieldConfig } from '@/components/EntityPage';
 import { PlotTasks } from '@/components/PlotTasks';
+import { PlotPriceGrid } from '@/components/PlotPriceGrid';
 
 const developerFields: FieldConfig[] = [
   { key: 'name', label: 'Name', required: true },
@@ -18,20 +19,12 @@ const developerFields: FieldConfig[] = [
 const siteFields: FieldConfig[] = [
   { key: 'name', label: 'Site Name', required: true },
   { key: 'developer_id', label: 'Developer', type: 'select', foreignTable: 'developers', foreignLabel: 'name' },
-  { key: 'address', label: 'Address' },
+  { key: 'address', label: 'Address', required: true },
+  { key: 'grid_reference', label: 'Grid Reference' },
+  { key: 'contacts', label: 'Contacts' },
+  { key: 'site_plans', label: 'Site Plans', type: 'file', bucket: 'site-plans' },
   { key: 'status', label: 'Status', type: 'select', options: [
     { value: 'active', label: 'Active' },
-    { value: 'complete', label: 'Complete' },
-  ]},
-];
-
-const plotFields: FieldConfig[] = [
-  { key: 'plot_name', label: 'Plot Name', required: true },
-  { key: 'site_id', label: 'Site', type: 'select', foreignTable: 'sites', foreignLabel: 'name' },
-  { key: 'house_type', label: 'House Type' },
-  { key: 'status', label: 'Status', type: 'select', options: [
-    { value: 'not_started', label: 'Not Started' },
-    { value: 'in_progress', label: 'In Progress' },
     { value: 'complete', label: 'Complete' },
   ]},
 ];
@@ -72,7 +65,7 @@ export default function Developers() {
     );
   }
 
-  // Level 3: Plots for a site
+  // Level 3: Plots for a site (price grid)
   if (drill.developer && drill.site) {
     return (
       <div className="space-y-4">
@@ -89,18 +82,13 @@ export default function Developers() {
             <h1 className="text-2xl font-semibold">{drill.site.name} – Plots</h1>
           </div>
         </div>
-        <EntityPage
-          variant="section"
-          title="Plots"
-          table="plots"
-          fields={plotFields}
-          defaultValues={{ status: 'not_started' }}
-          parentFilter={{ column: 'site_id', value: drill.site.id }}
-          onRowClick={(row) =>
+        <PlotPriceGrid
+          siteId={drill.site.id}
+          onOpenPlot={(plot) =>
             setDrill({
               developer: drill.developer,
               site: drill.site,
-              plot: { id: row.id, name: row.plot_name },
+              plot: { id: plot.id, name: plot.plot_name },
             })
           }
         />

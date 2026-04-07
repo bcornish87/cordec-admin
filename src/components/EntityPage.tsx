@@ -16,7 +16,7 @@ const SUPABASE_URL = 'https://xhqornncpcgewlbzutsd.supabase.co';
 export interface FieldConfig {
   key: string;
   label: string;
-  type?: 'text' | 'email' | 'tel' | 'number' | 'select' | 'image';
+  type?: 'text' | 'email' | 'tel' | 'number' | 'select' | 'image' | 'file';
   options?: { value: string; label: string }[];
   required?: boolean;
   /** For select fields that reference another table */
@@ -24,6 +24,10 @@ export interface FieldConfig {
   foreignLabel?: string;
   /** Width class for the column header */
   width?: string;
+  /** Storage bucket for image/file uploads. Defaults to 'logos'. */
+  bucket?: string;
+  // Accept attribute for file inputs. Defaults to 'image/*' for image, '*/*' for file.
+  accept?: string;
 }
 
 interface EntityPageProps {
@@ -186,37 +190,58 @@ export function EntityPage({
     // Hide the parent FK field from the form
     if (parentFilter && field.key === parentFilter.column) return null;
 
-    if (field.type === 'image') {
-      const currentUrl = formData[field.key];
+    if (field.type === 'image' || field.type === 'file') {
+      const isImage = field.type === 'image';
+      const bucket = field.bucket || 'logos';
+      const accept = field.accept || (isImage ? 'image/*' : '*/*');
+      const currentUrl: string = formData[field.key] || '';
       const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
         const ext = file.name.split('.').pop();
-        const path = `${table}/${Date.now()}.${ext}`;
-        const { error } = await supabase.storage.from('logos').upload(path, file, { upsert: true });
+        const path = `${table}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const { error } = await supabase.storage.from(bucket).upload(path, file, { upsert: true });
         if (error) { toast.error('Upload failed: ' + error.message); return; }
-        const url = `${SUPABASE_URL}/storage/v1/object/public/logos/${path}`;
+        const url = `${SUPABASE_URL}/storage/v1/object/public/${bucket}/${path}`;
         setFormData(p => ({ ...p, [field.key]: url }));
-        toast.success('Logo uploaded');
+        toast.success(isImage ? 'Image uploaded' : 'File uploaded');
       };
+      const fileName = currentUrl ? currentUrl.split('/').pop() : '';
       return (
         <div className="space-y-2">
           {currentUrl && (
-            <div className="relative inline-block">
-              <img src={currentUrl} alt="Logo" className="h-16 w-auto rounded border object-contain bg-white p-1" />
-              <button
-                type="button"
-                onClick={() => setFormData(p => ({ ...p, [field.key]: '' }))}
-                className="absolute -top-2 -right-2 rounded-full bg-destructive text-destructive-foreground h-5 w-5 flex items-center justify-center"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </div>
+            isImage ? (
+              <div className="relative inline-block">
+                <img src={currentUrl} alt="" className="h-16 w-auto rounded border object-contain bg-white p-1" />
+                <button
+                  type="button"
+                  onClick={() => setFormData(p => ({ ...p, [field.key]: '' }))}
+                  className="absolute -top-2 -right-2 rounded-full bg-destructive text-destructive-foreground h-5 w-5 flex items-center justify-center"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-sm border rounded-md px-3 py-2 w-fit">
+                <a href={currentUrl} target="_blank" rel="noreferrer" className="underline truncate max-w-[260px]">
+                  {fileName}
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setFormData(p => ({ ...p, [field.key]: '' }))}
+                  className="rounded-full bg-destructive text-destructive-foreground h-5 w-5 flex items-center justify-center"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            )
           )}
           <label className="flex items-center gap-2 cursor-pointer text-sm text-muted-foreground hover:text-foreground border rounded-md px-3 py-2 w-fit">
             <Upload className="h-4 w-4" />
-            {currentUrl ? 'Change logo' : 'Upload logo'}
-            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            {currentUrl
+              ? (isImage ? 'Change image' : 'Replace file')
+              : (isImage ? 'Upload image' : 'Upload file')}
+            <input type="file" accept={accept} className="hidden" onChange={handleFileChange} />
           </label>
         </div>
       );
@@ -263,6 +288,19 @@ export function EntityPage({
     const v = row[f.key];
     if (f.type === 'image') {
       return v ? <img src={v} alt="" className="h-8 w-auto object-contain" /> : null;
+    }
+    if (f.type === 'file') {
+      return v ? (
+        <a
+          href={v}
+          target="_blank"
+          rel="noreferrer"
+          className="underline text-sm"
+          onClick={e => e.stopPropagation()}
+        >
+          View
+        </a>
+      ) : null;
     }
     if (f.type === 'select' && f.options) {
       const label = f.options.find(o => o.value === v)?.label ?? v;
