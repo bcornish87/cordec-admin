@@ -3,13 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
-  ArrowLeft, FileText, ChevronDown, Plus, ExternalLink, X,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import {
+  FileText, ChevronDown, Plus, ExternalLink, X,
   Pencil, Archive as ArchiveIcon, Upload,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { Breadcrumbs, FieldConfig } from '@/components/EntityPage';
 import { PlotPriceGrid } from '@/components/PlotPriceGrid';
+import { SiteContacts } from '@/components/SiteContacts';
+import { DeveloperContacts } from '@/components/DeveloperContacts';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -262,11 +268,10 @@ const siteFields: FieldConfig[] = [
   { key: 'developer_id', label: 'Developer', type: 'select', foreignTable: 'developers', foreignLabel: 'name' },
   { key: 'address', label: 'Address', required: true },
   { key: 'grid_reference', label: 'Grid Reference' },
-  { key: 'contacts', label: 'Contacts' },
   { key: 'site_plans', label: 'Site Plans', type: 'file', bucket: 'site-plans' },
   { key: 'status', label: 'Status', type: 'select', options: [
     { value: 'active', label: 'Active' },
-    { value: 'complete', label: 'Complete' },
+    { value: 'inactive', label: 'Inactive' },
   ]},
 ];
 
@@ -285,6 +290,8 @@ interface DeveloperRow {
   name: string;
   is_archived: boolean;
   logo_url?: string | null;
+  site_count: number;
+  unit_count: number;
   [key: string]: unknown;
 }
 
@@ -303,16 +310,24 @@ function DevelopersList({
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('developers')
-      .select('*')
-      .order('name', { ascending: true });
-    if (error) {
-      toast.error('Load failed: ' + error.message);
+    const [devsRes, statsRes] = await Promise.all([
+      supabase.from('developers').select('*').order('name', { ascending: true }),
+      supabase.rpc('get_developer_stats'),
+    ]);
+    if (devsRes.error) {
+      toast.error('Load failed: ' + devsRes.error.message);
       setLoading(false);
       return;
     }
-    setDevelopers((data || []) as DeveloperRow[]);
+    const statsMap = new Map<string, { site_count: number; unit_count: number }>();
+    for (const s of (statsRes.data || []) as any[]) {
+      statsMap.set(s.developer_id, { site_count: Number(s.site_count), unit_count: Number(s.unit_count) });
+    }
+    setDevelopers((devsRes.data || []).map((d: any) => ({
+      ...d,
+      site_count: statsMap.get(d.id)?.site_count ?? 0,
+      unit_count: statsMap.get(d.id)?.unit_count ?? 0,
+    })) as DeveloperRow[]);
     setLoading(false);
   };
 
@@ -396,100 +411,112 @@ function DevelopersList({
   };
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Developers</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Developers</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Developers: {active.length} active &middot; {archived.length} archived &middot; {developers.length} total
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Sites: {active.reduce((s, d) => s + d.site_count, 0)}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Units: {active.reduce((s, d) => s + d.unit_count, 0)}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setShowArchived(s => !s)}
-          >
-            <ArchiveIcon className="mr-2 h-4 w-4" />
-            Archive ({archived.length})
-          </Button>
+          {archived.length > 0 && (
+            <Button
+              variant={showArchived ? 'default' : 'outline'}
+              onClick={() => setShowArchived(s => !s)}
+            >
+              <ArchiveIcon className="mr-2 h-4 w-4" />
+              Archived ({archived.length})
+            </Button>
+          )}
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />Add Developer
           </Button>
         </div>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="px-4 py-8 text-center text-muted-foreground">Loading…</div>
-        ) : active.length === 0 ? (
-          <div className="px-4 py-8 text-center text-muted-foreground">
-            No developers yet. Click "Add Developer" to create one.
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {active.map(dev => (
-              <li
-                key={dev.id}
-                className="flex items-center gap-4 px-4 py-3 hover:bg-muted/30"
-              >
-                <button
-                  type="button"
-                  onClick={() => onOpen({ id: dev.id, name: dev.name })}
-                  className="min-w-0 text-left font-medium truncate hover:underline"
-                >
-                  {dev.name}
-                </button>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openEdit(dev)}
-                  >
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setArchived(dev.id, true)}
-                  >
-                    <ArchiveIcon className="h-3.5 w-3.5 mr-1.5" />
-                    Archive
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {showArchived && (
+      {loading ? (
+        <div className="text-muted-foreground">Loading…</div>
+      ) : showArchived ? (
         <div className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Archived
-          </h2>
-          <div className="border rounded-lg overflow-hidden opacity-70">
-            {archived.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-muted-foreground italic">
-                No archived developers
-              </div>
-            ) : (
-              <ul className="divide-y">
-                {archived.map(dev => (
-                  <li
-                    key={dev.id}
-                    className="flex items-center gap-4 px-4 py-3 text-muted-foreground"
-                  >
-                    <span className="min-w-0 truncate">{dev.name}</span>
-                    <div className="ml-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setArchived(dev.id, false)}
-                      >
-                        Restore
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Archived Developers</h3>
+          {archived.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No archived developers</p>
+          ) : (
+            <div className="border rounded-lg bg-card">
+              <Table className="table-fixed">
+                <colgroup>
+                  <col className="w-[60%]" />
+                  <col className="w-[40%]" />
+                </colgroup>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-9 text-center">Name</TableHead>
+                    <TableHead className="h-9 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archived.map(dev => (
+                    <TableRow key={dev.id} className="[&:nth-child(even)]:bg-transparent">
+                      <TableCell className="py-2 text-center text-muted-foreground">{dev.name}</TableCell>
+                      <TableCell className="py-2 text-center">
+                        <Button variant="outline" size="sm" onClick={() => setArchived(dev.id, false)}>
+                          Restore
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      ) : active.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">No developers yet. Click "Add Developer" to create one.</p>
+      ) : (
+        <div className="border rounded-lg bg-card">
+          <Table className="table-fixed">
+            <colgroup>
+              <col className="w-[40%]" />
+              <col className="w-[20%]" />
+              <col className="w-[40%]" />
+            </colgroup>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-9 text-center">Name</TableHead>
+                <TableHead className="h-9 text-center">Sites</TableHead>
+                <TableHead className="h-9 text-center">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {active.map(dev => (
+                <TableRow
+                  key={dev.id}
+                  className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                  onClick={() => onOpen({ id: dev.id, name: dev.name })}
+                >
+                  <TableCell className="py-2 text-center font-medium">{dev.name}</TableCell>
+                  <TableCell className="py-2 text-center">{dev.site_count}</TableCell>
+                  <TableCell className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                    <div className="inline-flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(dev)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setArchived(dev.id, true)}>
+                        <ArchiveIcon className="h-3.5 w-3.5 mr-1.5" />Archive
                       </Button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -570,6 +597,7 @@ interface SiteRow {
   name: string;
   is_archived: boolean;
   status?: string | null;
+  plot_count: number;
   [key: string]: unknown;
 }
 
@@ -587,12 +615,24 @@ function SitesList({
   const [editing, setEditing] = useState<SiteRow | null>(null);
   const [formData, setFormData] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
+  const [devContacts, setDevContacts] = useState<{ id: string; first_name: string; last_name: string; default_role: string | null }[]>([]);
+  const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
+
+  const fetchDevContacts = async () => {
+    const { data } = await supabase
+      .from('contacts')
+      .select('id, first_name, last_name, default_role')
+      .eq('developer_id', developerId)
+      .eq('is_archived', false)
+      .order('first_name');
+    setDevContacts(data || []);
+  };
 
   const fetchAll = async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('sites')
-      .select('*')
+      .select('*, plots(id)')
       .eq('developer_id', developerId)
       .order('name', { ascending: true });
     if (error) {
@@ -600,12 +640,13 @@ function SitesList({
       setLoading(false);
       return;
     }
-    setSites((data || []) as SiteRow[]);
+    setSites((data || []).map((s: any) => ({ ...s, plot_count: s.plots?.length ?? 0 })) as SiteRow[]);
     setLoading(false);
   };
 
   useEffect(() => {
     fetchAll();
+    fetchDevContacts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [developerId]);
 
@@ -625,10 +666,11 @@ function SitesList({
     });
     fd.status = 'active';
     setFormData(fd);
+    setSelectedContactIds([]);
     setDialogOpen(true);
   };
 
-  const openEdit = (site: SiteRow) => {
+  const openEdit = async (site: SiteRow) => {
     setEditing(site);
     const fd: Record<string, string> = {};
     editableFields.forEach(f => {
@@ -636,6 +678,12 @@ function SitesList({
       fd[f.key] = v == null ? '' : String(v);
     });
     setFormData(fd);
+    // Load current site contacts
+    const { data: sc } = await supabase
+      .from('site_contacts')
+      .select('contact_id')
+      .eq('site_id', site.id);
+    setSelectedContactIds((sc || []).map((r: any) => r.contact_id));
     setDialogOpen(true);
   };
 
@@ -647,17 +695,49 @@ function SitesList({
         .from('sites')
         .update(payload)
         .eq('id', editing.id);
-      if (error) toast.error('Update failed: ' + error.message);
+      if (error) { toast.error('Update failed: ' + error.message); }
       else {
+        // Sync contacts: get current, diff, add/remove
+        const { data: currentSc } = await supabase
+          .from('site_contacts')
+          .select('contact_id')
+          .eq('site_id', editing.id);
+        const currentIds = (currentSc || []).map((r: any) => r.contact_id);
+        const toRemove = currentIds.filter((id: string) => !selectedContactIds.includes(id));
+        const toAdd = selectedContactIds.filter(id => !currentIds.includes(id));
+        if (toRemove.length > 0) {
+          await supabase.from('site_contacts').delete().eq('site_id', editing.id).in('contact_id', toRemove);
+        }
+        if (toAdd.length > 0) {
+          const rows = toAdd.map(contactId => {
+            const c = devContacts.find(dc => dc.id === contactId);
+            return { site_id: editing.id, contact_id: contactId, role: c?.default_role || 'Site Manager' };
+          });
+          await supabase.from('site_contacts').insert(rows);
+        }
         toast.success('Saved');
         setDialogOpen(false);
         await fetchAll();
       }
     } else {
       payload.developer_id = developerId;
-      const { error } = await supabase.from('sites').insert(payload);
+      const { data: newSite, error } = await supabase.from('sites').insert(payload).select('id').single();
       if (error) toast.error('Create failed: ' + error.message);
       else {
+        await supabase.from('plots').insert({
+          site_id: newSite.id,
+          plot_name: '1',
+          status: 'not_started',
+          sort_order: 0,
+        });
+        // Assign selected contacts
+        if (selectedContactIds.length > 0) {
+          const rows = selectedContactIds.map(contactId => {
+            const c = devContacts.find(dc => dc.id === contactId);
+            return { site_id: newSite.id, contact_id: contactId, role: c?.default_role || 'Site Manager' };
+          });
+          await supabase.from('site_contacts').insert(rows);
+        }
         toast.success('Created');
         setDialogOpen(false);
         await fetchAll();
@@ -681,6 +761,20 @@ function SitesList({
     toast.success(value ? 'Site archived' : 'Site restored');
   };
 
+  const updateSiteStatus = async (id: string, status: string) => {
+    const { error } = await supabase
+      .from('sites')
+      .update({ status })
+      .eq('id', id);
+    if (error) {
+      toast.error('Status update failed: ' + error.message);
+      return;
+    }
+    setSites(prev =>
+      prev.map(s => (s.id === id ? { ...s, status } : s))
+    );
+  };
+
   const handleSitePlanUpload = async (file: File) => {
     const ext = file.name.split('.').pop();
     const path = `sites/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
@@ -697,97 +791,134 @@ function SitesList({
   };
 
   return (
-    <div className="space-y-4 max-w-2xl mx-auto">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Sites</h2>
+        <div>
+          <h2 className="text-lg font-semibold">Sites</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Active: {active.length} &middot; Archived: {archived.length} &middot; Total: {sites.length}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            Units: {active.reduce((s, site) => s + site.plot_count, 0)}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowArchived(s => !s)}
-          >
-            <ArchiveIcon className="mr-2 h-4 w-4" />
-            Archive ({archived.length})
-          </Button>
+          {archived.length > 0 && (
+            <Button
+              variant={showArchived ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setShowArchived(s => !s)}
+            >
+              <ArchiveIcon className="mr-2 h-4 w-4" />
+              Archived ({archived.length})
+            </Button>
+          )}
           <Button size="sm" onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />Add Site
           </Button>
         </div>
       </div>
 
-      <div className="border rounded-lg overflow-hidden">
-        {loading ? (
-          <div className="px-4 py-8 text-center text-muted-foreground">Loading…</div>
-        ) : active.length === 0 ? (
-          <div className="px-4 py-8 text-center text-muted-foreground">
-            No sites yet. Click "Add Site" to create one.
-          </div>
-        ) : (
-          <ul className="divide-y">
-            {active.map(site => (
-              <li
-                key={site.id}
-                className="flex items-center gap-4 px-4 py-3 hover:bg-muted/30"
-              >
-                <button
-                  type="button"
-                  onClick={() => onOpen({ id: site.id, name: site.name })}
-                  className="min-w-0 text-left font-medium truncate hover:underline"
-                >
-                  {site.name}
-                </button>
-                <div className="ml-auto flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => openEdit(site)}>
-                    <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setArchived(site.id, true)}
-                  >
-                    <ArchiveIcon className="h-3.5 w-3.5 mr-1.5" />
-                    Archive
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {showArchived && (
+      {loading ? (
+        <div className="text-muted-foreground">Loading…</div>
+      ) : showArchived ? (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-            Archived
-          </h3>
-          <div className="border rounded-lg overflow-hidden opacity-70">
-            {archived.length === 0 ? (
-              <div className="px-4 py-6 text-center text-sm text-muted-foreground italic">
-                No archived sites
-              </div>
-            ) : (
-              <ul className="divide-y">
-                {archived.map(site => (
-                  <li
-                    key={site.id}
-                    className="flex items-center gap-4 px-4 py-3 text-muted-foreground"
-                  >
-                    <span className="min-w-0 truncate">{site.name}</span>
-                    <div className="ml-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setArchived(site.id, false)}
-                      >
-                        Restore
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Archived Sites</h3>
+          {archived.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No archived sites</p>
+          ) : (
+            <div className="border rounded-lg bg-card">
+              <Table className="table-fixed">
+                <colgroup>
+                  <col className="w-[60%]" />
+                  <col className="w-[40%]" />
+                </colgroup>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="h-9 text-center">Name</TableHead>
+                    <TableHead className="h-9 text-center">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {archived.map(site => (
+                    <TableRow key={site.id} className="[&:nth-child(even)]:bg-transparent">
+                      <TableCell className="py-2 text-center text-muted-foreground">{site.name}</TableCell>
+                      <TableCell className="py-2 text-center">
+                        <Button variant="outline" size="sm" onClick={() => setArchived(site.id, false)}>
+                          Restore
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </div>
+      ) : active.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">No sites yet. Click "Add Site" to create one.</p>
+      ) : (
+        <div className="border rounded-lg bg-card">
+          <Table className="table-fixed">
+            <colgroup>
+              <col className="w-[30%]" />
+              <col className="w-[15%]" />
+              <col className="w-[15%]" />
+              <col className="w-[40%]" />
+            </colgroup>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="h-9 text-center">Name</TableHead>
+                <TableHead className="h-9 text-center">Units</TableHead>
+                <TableHead className="h-9 text-center">Status</TableHead>
+                <TableHead className="h-9 text-center">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {active.map(site => {
+                const isActive = site.status !== 'inactive';
+                return (
+                <TableRow
+                  key={site.id}
+                  className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                  onClick={() => onOpen({ id: site.id, name: site.name })}
+                >
+                  <TableCell className="py-2 text-center font-medium">{site.name}</TableCell>
+                  <TableCell className="py-2 text-center">{site.plot_count}</TableCell>
+                  <TableCell className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className={`inline-flex items-center gap-1 rounded-md px-2.5 py-0.5 text-xs font-medium transition-colors outline-none ${
+                        isActive
+                          ? 'bg-green-500/15 text-green-500 hover:bg-green-500/25'
+                          : 'bg-red-500/15 text-red-500 hover:bg-red-500/25'
+                      }`}>
+                        {isActive ? 'Active' : 'Inactive'} <ChevronDown className="h-3 w-3 opacity-50" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="center">
+                        <DropdownMenuItem onClick={() => updateSiteStatus(site.id, 'active')}>
+                          <span className="text-green-500">Active</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => updateSiteStatus(site.id, 'inactive')}>
+                          <span className="text-red-500">Inactive</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                  <TableCell className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                    <div className="inline-flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(site)}>
+                        <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={() => setArchived(site.id, true)}>
+                        <ArchiveIcon className="h-3.5 w-3.5 mr-1.5" />Archive
                       </Button>
                     </div>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                  </TableCell>
+                </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
         </div>
       )}
 
@@ -862,6 +993,31 @@ function SitesList({
                 )}
               </div>
             ))}
+            {devContacts.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Contacts</Label>
+                <div className="space-y-2 rounded-md border p-3 max-h-40 overflow-y-auto">
+                  {devContacts.map(c => (
+                    <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={selectedContactIds.includes(c.id)}
+                        onCheckedChange={(checked) => {
+                          setSelectedContactIds(prev =>
+                            checked
+                              ? [...prev, c.id]
+                              : prev.filter(id => id !== c.id)
+                          );
+                        }}
+                      />
+                      {c.first_name} {c.last_name}
+                      {c.default_role && (
+                        <span className="text-muted-foreground">— {c.default_role}</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -886,21 +1042,17 @@ export default function Developers() {
     const site = drill.site;
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setDrill({ developer })}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <Breadcrumbs items={[
-            { label: 'Developers', onClick: () => setDrill({}) },
-            { label: developer.name, onClick: () => setDrill({ developer }) },
-            { label: site.name },
-          ]} />
-        </div>
+        <Breadcrumbs items={[
+          { label: 'Developers', onClick: () => setDrill({}) },
+          { label: developer.name, onClick: () => setDrill({ developer }) },
+          { label: site.name },
+        ]} />
         <SiteInfoPanel
           siteId={site.id}
           initialName={site.name}
           onNameSaved={name => setDrill({ developer, site: { id: site.id, name } })}
         />
+        <SiteContacts siteId={site.id} developerId={developer.id} />
         <PlotPriceGrid siteId={site.id} />
       </div>
     );
@@ -909,18 +1061,13 @@ export default function Developers() {
   // Level 2: Sites for a developer
   if (drill.developer) {
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => setDrill({})}>
-            <ArrowLeft className="h-4 w-4" />
-          </Button>
-          <div>
-            <Breadcrumbs items={[
-              { label: 'Developers', onClick: () => setDrill({}) },
-              { label: drill.developer.name },
-            ]} />
-            <h1 className="text-2xl font-semibold">{drill.developer.name} – Sites</h1>
-          </div>
+      <div className="space-y-6">
+        <div>
+          <Breadcrumbs items={[
+            { label: 'Developers', onClick: () => setDrill({}) },
+            { label: drill.developer.name },
+          ]} />
+          <h1 className="text-2xl font-semibold">{drill.developer.name}</h1>
         </div>
         <SitesList
           developerId={drill.developer.id}
@@ -931,6 +1078,7 @@ export default function Developers() {
             })
           }
         />
+        <DeveloperContacts developerId={drill.developer.id} />
       </div>
     );
   }
