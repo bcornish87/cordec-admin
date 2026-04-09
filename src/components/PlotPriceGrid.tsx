@@ -11,7 +11,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { BackToTop } from '@/components/BackToTop';
 import { Checkbox } from '@/components/ui/checkbox';
 
-type TaskType = 'internal' | 'external' | 'variation';
+type TaskType = 'internal' | 'garage' | 'external' | 'variation';
 
 interface Plot {
   id: string;
@@ -31,7 +31,7 @@ interface ArchivedPlotEntry {
 interface Template {
   id: string;
   name: string;
-  type: 'internal' | 'external';
+  type: 'internal' | 'garage' | 'external';
   sort_order: number;
 }
 
@@ -129,7 +129,7 @@ export function PlotPriceGrid({ siteId }: Props) {
         .order('sort_order', { ascending: true }),
     ]);
     if (plotsRes.error) {
-      toast.error('Plots load failed: ' + plotsRes.error.message);
+      toast.error('Units load failed: ' + plotsRes.error.message);
       setLoading(false);
       return;
     }
@@ -149,17 +149,36 @@ export function PlotPriceGrid({ siteId }: Props) {
 
     if (plotList.length > 0) {
       const ids = plotList.map(p => p.id);
-      const { data: taskData, error: taskErr } = await supabase
-        .from('plot_tasks')
-        .select('*')
-        .in('plot_id', ids)
-        .eq('archived', false);
+      // Supabase's PostgREST max-rows (default 1000) silently caps .limit().
+      // Paginate to fetch ALL plot_tasks regardless of server config.
+      let allTaskData: PlotTaskRow[] = [];
+      let taskErr: { message: string } | null = null;
+      const PAGE = 1000;
+      for (let from = 0; ; from += PAGE) {
+        // eslint-disable-next-line no-await-in-loop
+        const { data: page, error: pageErr } = await supabase
+          .from('plot_tasks')
+          .select('*')
+          .in('plot_id', ids)
+          .eq('archived', false)
+          .order('id')
+          .range(from, from + PAGE - 1);
+        if (pageErr) { taskErr = pageErr; break; }
+        const rows = (page || []) as PlotTaskRow[];
+        allTaskData.push(...rows);
+        if (rows.length < PAGE) break; // last page
+      }
+      const taskData = allTaskData;
       if (taskErr) {
         toast.error('Tasks load failed: ' + taskErr.message);
         setLoading(false);
         return;
       }
       const t = (taskData || []) as PlotTaskRow[];
+      console.log(`[fetchAll] returned ${t.length} plot_tasks rows for ${ids.length} plots`);
+      if (t.length > 0) {
+        console.log(`[fetchAll] first 5 rows:`, t.slice(0, 5));
+      }
       setTasks(t);
       const v: Record<string, string> = {};
       const idMap: Record<string, string> = {};
@@ -171,6 +190,7 @@ export function PlotPriceGrid({ siteId }: Props) {
         // £0 has no domain meaning here — treat as unset so the cell shows blank.
         if (task.price != null && Number(task.price) !== 0) v[k] = String(task.price);
       }
+      console.log(`[fetchAll] cells with values: ${Object.keys(v).length}, total taskIds: ${Object.keys(idMap).length}`);
       setValues(v);
       setTaskIds(idMap);
     } else {
@@ -238,7 +258,11 @@ export function PlotPriceGrid({ siteId }: Props) {
       sameType.length > 0
         ? Math.max(...sameType.map(t => t.sort_order)) + 1
         : template.sort_order;
-    const { data, error } = await supabase
+    // Try INSERT first. The unique index on (plot_id, task_template_id) is partial, so
+    // we can't use ON CONFLICT from the client — instead we catch 23505, find the
+    // existing (possibly archived) row, and update it in place.
+    let row: PlotTaskRow | null = null;
+    const insertRes = await supabase
       .from('plot_tasks')
       .insert({
         plot_id: plotId,
@@ -250,12 +274,46 @@ export function PlotPriceGrid({ siteId }: Props) {
       })
       .select()
       .single();
-    if (error) {
-      toast.error('Save failed: ' + error.message);
-      return;
+    if (insertRes.error) {
+      // 23505 = unique_violation. An archived row already exists for this cell —
+      // revive it with the new price instead of creating a duplicate.
+      const isDuplicate =
+        (insertRes.error as { code?: string }).code === '23505' ||
+        /duplicate key/i.test(insertRes.error.message);
+      if (!isDuplicate) {
+        toast.error('Save failed: ' + insertRes.error.message);
+        return;
+      }
+      const { data: existing, error: findErr } = await supabase
+        .from('plot_tasks')
+        .select('*')
+        .eq('plot_id', plotId)
+        .eq('task_template_id', template.id)
+        .maybeSingle();
+      if (findErr || !existing) {
+        toast.error('Save failed: ' + (findErr?.message ?? 'conflict row not found'));
+        return;
+      }
+      const { data: updated, error: updateErr } = await supabase
+        .from('plot_tasks')
+        .update({
+          price: numeric,
+          archived: false,
+          name: template.name,
+          type: template.type,
+        })
+        .eq('id', (existing as PlotTaskRow).id)
+        .select()
+        .single();
+      if (updateErr || !updated) {
+        toast.error('Save failed: ' + (updateErr?.message ?? 'update failed'));
+        return;
+      }
+      row = updated as PlotTaskRow;
+    } else if (insertRes.data) {
+      row = insertRes.data as PlotTaskRow;
     }
-    if (data) {
-      const row = data as PlotTaskRow;
+    if (row) {
       // Update refs synchronously so the next sequential persistCell sees the new id.
       taskIdsRef.current = { ...taskIdsRef.current, [key]: row.id };
       tasksRef.current = [...tasksRef.current, row];
@@ -401,7 +459,7 @@ export function PlotPriceGrid({ siteId }: Props) {
         .select('plot_name')
         .eq('site_id', siteId);
       if (existingErr) {
-        toast.error('Failed to check existing plots: ' + existingErr.message);
+        toast.error('Failed to check existing units: ' + existingErr.message);
         return;
       }
       const existingNames = new Set(
@@ -439,7 +497,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       const { inserted: insertedPlots, error: insertErr } =
         await bulkInsertPlotsChunked(newRows);
       if (insertErr) {
-        toast.error('Failed to create plots: ' + insertErr);
+        toast.error('Failed to create units: ' + insertErr);
         return;
       }
       createdCount = insertedPlots.length;
@@ -456,7 +514,7 @@ export function PlotPriceGrid({ siteId }: Props) {
           .in('plot_id', newPlotIds)
           .eq('archived', false);
         if (tasksErr) {
-          toast.error('Failed to load tasks for new plots: ' + tasksErr.message);
+          toast.error('Failed to load tasks for new units: ' + tasksErr.message);
           return;
         }
         const triggerTasks = (triggerTaskData ?? []) as PlotTaskRow[];
@@ -493,42 +551,91 @@ export function PlotPriceGrid({ siteId }: Props) {
           `Created ${createdCount} new plot${createdCount === 1 ? '' : 's'}, skipped ${skippedCount} duplicate${skippedCount === 1 ? '' : 's'}`
         );
       } else if (createdCount > 0) {
-        toast.success(`Created ${createdCount} new plot${createdCount === 1 ? '' : 's'}`);
+        toast.success(`Created ${createdCount} new unit${createdCount === 1 ? '' : 's'}`);
       }
     }
 
-    // ---------- Step 2: build the cell update list (no side effects in setState) ----------
-    const updates: Array<{ plotId: string; template: Template; raw: string }> = [];
+    // ---------- Step 2: collect upsert rows for a single bulk RPC call ----------
+    const upsertRows: Array<{
+      plot_id: string; task_template_id: string;
+      name: string; type: string; sort_order: number; price: number | null;
+    }> = [];
     const nextValues = { ...valuesRef.current };
+
+    // Build a section-specific template list so paste columns map to the visible
+    // columns in the current section, not to arbitrary global template indices.
+    // e.g. if Internal has templates at global indices [0, 3, 5, 8], pasting 4
+    // columns should map to those 4 — not to global indices [0, 1, 2, 3].
+    const anchorTemplate = currentTemplates[anchor.tplIdx];
+    const sectionType = anchorTemplate.type;
+    const sectionTemplates = currentTemplates.filter(t => t.type === sectionType);
+    const anchorSectionIdx = sectionTemplates.findIndex(t => t.id === anchorTemplate.id);
+
+    console.log(`[paste] ===== PASTE START =====`);
+    console.log(`[paste] Grid: ${grid.length} rows × ${Math.max(...grid.map(r => r.length))} cols`);
+    console.log(`[paste] Section: ${sectionType}, anchor col ${anchorSectionIdx} of ${sectionTemplates.length} cols`);
+    console.log(`[paste] Anchor plot: ${workingPlots[anchor.plotIdx]?.plot_name ?? '?'}`);
+
     for (let r = 0; r < grid.length; r++) {
       const plotIdx = anchor.plotIdx + r;
       if (plotIdx >= workingPlots.length) break;
       const plot = workingPlots[plotIdx];
       for (let c = 0; c < grid[r].length; c++) {
-        const tplIdx = anchor.tplIdx + c;
-        if (tplIdx >= currentTemplates.length) break;
-        const template = currentTemplates[tplIdx];
-        // Strip thousands separators / currency symbols so "1,234.56" parses cleanly.
+        const sectionTplIdx = anchorSectionIdx + c;
+        if (sectionTplIdx >= sectionTemplates.length) break;
+        const template = sectionTemplates[sectionTplIdx];
         const raw = cleanNumericInput((grid[r][c] ?? '').trim());
-        nextValues[cellKey(plot.id, template.id)] = raw;
-        updates.push({ plotId: plot.id, template, raw });
+        if (raw === '') continue;
+        const parsed = parseFloat(raw);
+        if (!Number.isFinite(parsed)) continue;
+        const numeric = parsed === 0 ? null : parsed;
+        const key = cellKey(plot.id, template.id);
+        nextValues[key] = raw;
+
+        // Compute sort_order for potential new rows.
+        const sameType = tasksRef.current.filter(
+          t => t.plot_id === plot.id && t.type === template.type
+        );
+        const sortOrder =
+          sameType.length > 0
+            ? Math.max(...sameType.map(t => t.sort_order)) + 1
+            : template.sort_order;
+
+        upsertRows.push({
+          plot_id: plot.id,
+          task_template_id: template.id,
+          name: template.name,
+          type: template.type,
+          sort_order: sortOrder,
+          price: numeric,
+        });
+        console.log(`[paste] Plot "${plot.plot_name}" / "${template.name}": ${numeric}`);
       }
     }
+
     valuesRef.current = nextValues;
     setValues(nextValues);
 
-    // ---------- Step 3: persist sequentially ----------
-    // Sequential await so persistCell's synchronous ref updates are visible to the next
-    // iteration. Errors surface as toasts inside persistCell — we don't bail.
-    for (const u of updates) {
-      // eslint-disable-next-line no-await-in-loop
-      await persistCell(u.plotId, u.template, u.raw);
+    if (upsertRows.length === 0) {
+      console.log(`[paste] Nothing to upsert`);
+      return;
     }
 
-    // ---------- Step 4: safety-net refetch ----------
-    // Pull everything from Supabase one more time so the visible grid is exactly what's
-    // persisted. If any write silently failed above, this surfaces the discrepancy.
+    // ---------- Step 3: single bulk upsert via RPC ----------
+    console.log(`[paste] Upserting ${upsertRows.length} cells via bulk_upsert_plot_tasks RPC...`);
+    const { error: rpcError } = await supabase.rpc('bulk_upsert_plot_tasks', {
+      items: upsertRows,
+    });
+    if (rpcError) {
+      console.error(`[paste] RPC FAILED:`, rpcError);
+      toast.error('Bulk save failed: ' + rpcError.message);
+    } else {
+      console.log(`[paste] RPC OK — ${upsertRows.length} cells saved`);
+    }
+
+    // ---------- Step 4: single refetch to resync grid ----------
     await fetchAll();
+    console.log(`[paste] ===== PASTE DONE =====`);
   };
 
   const handleAddVariation = async () => {
@@ -538,7 +645,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       return;
     }
     if (plotsRef.current.length === 0) {
-      toast.error('No plots on this site yet');
+      toast.error('No units on this site yet');
       return;
     }
     const priceRaw = variationPrice.trim();
@@ -558,7 +665,7 @@ export function PlotPriceGrid({ siteId }: Props) {
         ? plotsRef.current
         : plotsRef.current.filter(p => p.id === variationApplyTo);
     if (targetPlots.length === 0) {
-      toast.error('Selected plot not found');
+      toast.error('Selected unit not found');
       return;
     }
 
@@ -576,7 +683,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       }
     } else {
       if (existingRows.some(t => t.plot_id === variationApplyTo)) {
-        toast.error(`This plot already has a ${variationType} variation called "${name}"`);
+        toast.error(`This unit already has a ${variationType} variation called "${name}"`);
         return;
       }
     }
@@ -609,7 +716,7 @@ export function PlotPriceGrid({ siteId }: Props) {
     }
     toast.success(
       variationApplyTo === 'all'
-        ? `Added "${name}" to ${targetPlots.length} plot${targetPlots.length === 1 ? '' : 's'}`
+        ? `Added "${name}" to ${targetPlots.length} unit${targetPlots.length === 1 ? '' : 's'}`
         : `Added "${name}" to plot ${targetPlots[0].plot_name}`
     );
     setVariationOpen(false);
@@ -623,7 +730,7 @@ export function PlotPriceGrid({ siteId }: Props) {
   const handleAddPlot = async () => {
     const name = newPlotName.trim();
     if (!name) {
-      toast.error('Plot name required');
+      toast.error('Unit name required');
       return;
     }
     const nextSort =
@@ -640,7 +747,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Add failed: ' + error.message);
       return;
     }
-    toast.success('Plot added');
+    toast.success('Unit added');
     setNewPlotName('');
     setAddOpen(false);
     fetchAll();
@@ -660,7 +767,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Delete failed: ' + error.message);
       return;
     }
-    toast.success(`Plot ${target.plot_name} archived`);
+    toast.success(`Unit ${target.plot_name} archived`);
 
     // Update local state + refs synchronously so the rows disappear from both tables.
     const remainingPlots = plotsRef.current.filter(p => p.id !== target.id);
@@ -693,7 +800,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       .eq('site_id', siteId)
       .eq('is_archived', true);
     if (plotErr) {
-      toast.error('Failed to load archived plots: ' + plotErr.message);
+      toast.error('Failed to load archived units: ' + plotErr.message);
       setArchivedLoading(false);
       return;
     }
@@ -721,7 +828,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       set.add(t.type);
       sectionsByPlot.set(t.plot_id, set);
     }
-    const orderedTypes: TaskType[] = ['internal', 'external', 'variation'];
+    const orderedTypes: TaskType[] = ['internal', 'garage', 'external', 'variation'];
     const entries: ArchivedPlotEntry[] = rows
       .slice()
       .sort((a, b) => {
@@ -751,7 +858,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Restore failed: ' + error.message);
       return;
     }
-    toast.success('Plot restored');
+    toast.success('Unit restored');
     // Refresh both: the modal list and the main grid.
     await Promise.all([fetchArchivedPlots(), fetchAll()]);
   };
@@ -765,7 +872,7 @@ export function PlotPriceGrid({ siteId }: Props) {
     plotNameAtFocusRef.current = null;
     if (name === '') {
       // Reject blank — revert local state to the value from focus time.
-      toast.error('Plot name required');
+      toast.error('Unit name required');
       if (original != null) {
         const reverted = plotsRef.current.map(p =>
           p.id === plotId ? { ...p, plot_name: original } : p
@@ -840,7 +947,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       const { inserted: insertedPlots, error: insertErr } =
         await bulkInsertPlotsChunked(newRows);
       if (insertErr) {
-        toast.error('Failed to create plots: ' + insertErr);
+        toast.error('Failed to create units: ' + insertErr);
         return;
       }
       const skipped = overflow - insertedPlots.length;
@@ -849,7 +956,7 @@ export function PlotPriceGrid({ siteId }: Props) {
           `Created ${insertedPlots.length} new plot${insertedPlots.length === 1 ? '' : 's'}, skipped ${skipped} (already exist)`
         );
       } else if (insertedPlots.length > 0) {
-        toast.success(`Created ${insertedPlots.length} new plot${insertedPlots.length === 1 ? '' : 's'}`);
+        toast.success(`Created ${insertedPlots.length} new unit${insertedPlots.length === 1 ? '' : 's'}`);
       }
       const merged = [...workingPlots, ...insertedPlots];
       merged.sort((a, b) => {
@@ -886,7 +993,7 @@ export function PlotPriceGrid({ siteId }: Props) {
     if (renames.length > 0) {
       const results = await Promise.all(renames);
       const failed = results.filter(res => (res as { error?: unknown })?.error).length;
-      if (failed > 0) toast.error(`${failed} plot rename${failed === 1 ? '' : 's'} failed`);
+      if (failed > 0) toast.error(`${failed} unit rename${failed === 1 ? '' : 's'} failed`);
     }
 
     plotsRef.current = renamedExisting;
@@ -959,7 +1066,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Delete failed: ' + error.message);
       return;
     }
-    toast.success(`Plot ${target.plot_name} deleted`);
+    toast.success(`Unit ${target.plot_name} deleted`);
     setArchivedPlots(prev => prev.filter(p => p.id !== target.id));
   };
 
@@ -992,7 +1099,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Bulk archive failed: ' + error.message);
       return;
     }
-    toast.success(`Archived ${ids.length} plot${ids.length === 1 ? '' : 's'}`);
+    toast.success(`Archived ${ids.length} unit${ids.length === 1 ? '' : 's'}`);
     clearSelection();
     await fetchAll();
   };
@@ -1015,7 +1122,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       toast.error('Bulk delete failed: ' + error.message);
       return;
     }
-    toast.success(`Deleted ${ids.length} plot${ids.length === 1 ? '' : 's'}`);
+    toast.success(`Deleted ${ids.length} unit${ids.length === 1 ? '' : 's'}`);
     clearSelection();
     await fetchAll();
   };
@@ -1130,7 +1237,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                         plots.length > 0 && selectedPlotIds.size === plots.length
                       }
                       onCheckedChange={toggleSelectAll}
-                      aria-label="Select all plots"
+                      aria-label="Select all units"
                       className="h-4 w-4"
                     />
                     <span className="absolute inset-0 flex items-center justify-center pointer-events-none">
@@ -1139,7 +1246,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                   </div>
                 </th>
                 <th className="px-3 py-3 border-b border-border bg-card text-[#C2C9CC] text-[12px] font-semibold uppercase tracking-wider text-center">
-                  Plot
+                  Unit
                 </th>
                 {groupTemplates.map(({ tpl }) => (
                   <th
@@ -1153,7 +1260,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                   <th
                     key={`custom:${col.name}`}
                     className="px-3 py-3 border-b border-border bg-card text-[#C2C9CC] text-[12px] font-semibold uppercase tracking-wider text-center whitespace-nowrap italic"
-                    title="Variation column — blank a cell to remove from that plot"
+                    title="Variation column — blank a cell to remove from that unit"
                   >
                     <span className="inline-flex items-center gap-1.5">
                       <span>{col.name}</span>
@@ -1163,7 +1270,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                           setVariationToDelete({ name: col.name, type: groupType })
                         }
                         aria-label={`Delete variation ${col.name}`}
-                        title="Delete this variation from all plots"
+                        title="Delete this variation from all units"
                         className="inline-flex items-center justify-center h-5 w-5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
                       >
                         <X className="h-3 w-3" />
@@ -1209,7 +1316,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                         type="button"
                         onClick={() => setPlotToDelete(plot)}
                         aria-label={`Archive plot ${plot.plot_name}`}
-                        title="Archive plot"
+                        title="Archive unit"
                         className="inline-flex items-center justify-center h-7 w-7 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
                       >
                         <Archive className="h-3.5 w-3.5" />
@@ -1317,6 +1424,9 @@ export function PlotPriceGrid({ siteId }: Props) {
           <Button size="sm" variant="outline" onClick={() => scrollToSection('internal')}>
             Internal
           </Button>
+          <Button size="sm" variant="outline" onClick={() => scrollToSection('garage')}>
+            Garages
+          </Button>
           <Button size="sm" variant="outline" onClick={() => scrollToSection('external')}>
             External
           </Button>
@@ -1329,7 +1439,7 @@ export function PlotPriceGrid({ siteId }: Props) {
             size="sm"
             variant="outline"
             onClick={openArchivedModal}
-            title="View and restore archived plots"
+            title="View and restore archived units"
           >
             Show archived
           </Button>
@@ -1337,7 +1447,7 @@ export function PlotPriceGrid({ siteId }: Props) {
             <Plus className="mr-2 h-4 w-4" />Add variation
           </Button>
           <Button size="sm" onClick={() => setAddOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" />Add plot
+            <Plus className="mr-2 h-4 w-4" />Add unit
           </Button>
         </div>
       </div>
@@ -1346,7 +1456,7 @@ export function PlotPriceGrid({ siteId }: Props) {
         <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-4 py-2 shadow-sm">
           <div className="text-sm">
             <span className="font-semibold">{selectedPlotIds.size}</span>{' '}
-            plot{selectedPlotIds.size === 1 ? '' : 's'} selected
+            unit{selectedPlotIds.size === 1 ? '' : 's'} selected
           </div>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={clearSelection}>
@@ -1369,7 +1479,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       )}
 
       {plots.length === 0 ? (
-        <div className="text-muted-foreground italic">No plots yet. Add one to get started.</div>
+        <div className="text-muted-foreground italic">No units yet. Add one to get started.</div>
       ) : templates.length === 0 && !tasks.some(t => t.task_template_id == null) ? (
         <div className="text-muted-foreground italic">
           No task templates exist. Add some on the Task Templates page.
@@ -1377,6 +1487,7 @@ export function PlotPriceGrid({ siteId }: Props) {
       ) : (
         <div className="space-y-6">
           {renderTable('internal', 'Internal')}
+          {renderTable('garage', 'Garages')}
           {renderTable('external', 'External')}
           {renderTable('variation', 'Variations')}
         </div>
@@ -1385,11 +1496,11 @@ export function PlotPriceGrid({ siteId }: Props) {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add plot</DialogTitle>
+            <DialogTitle>Add unit</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label>Plot name / number</Label>
+              <Label>Unit name / number</Label>
               <Input
                 value={newPlotName}
                 onChange={e => setNewPlotName(e.target.value)}
@@ -1429,6 +1540,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="internal">Internal</SelectItem>
+                  <SelectItem value="garage">Garage</SelectItem>
                   <SelectItem value="external">External</SelectItem>
                   <SelectItem value="variation">Variation</SelectItem>
                 </SelectContent>
@@ -1452,10 +1564,10 @@ export function PlotPriceGrid({ siteId }: Props) {
               <Select value={variationApplyTo} onValueChange={setVariationApplyTo}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All plots</SelectItem>
+                  <SelectItem value="all">All units</SelectItem>
                   {plots.map(p => (
                     <SelectItem key={p.id} value={p.id}>
-                      Plot {p.plot_name}
+                      Unit {p.plot_name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1463,8 +1575,8 @@ export function PlotPriceGrid({ siteId }: Props) {
             </div>
             <p className="text-xs text-muted-foreground">
               {variationApplyTo === 'all'
-                ? "Adds this task to every plot on the site. Blank a cell in the grid to remove it from plots that don't need it."
-                : 'Adds this task to the selected plot only. You can add it to other plots later by typing a price into an empty cell in the grid.'}
+                ? "Adds this task to every unit on the site. Blank a cell in the grid to remove it from units that don't need it."
+                : 'Adds this task to the selected unit only. You can add it to other units later by typing a price into an empty cell in the grid.'}
             </p>
           </div>
           <DialogFooter>
@@ -1478,26 +1590,26 @@ export function PlotPriceGrid({ siteId }: Props) {
         open={!!plotToDelete}
         onClose={() => setPlotToDelete(null)}
         onConfirm={handleDeletePlot}
-        title={plotToDelete ? `Archive plot ${plotToDelete.plot_name}?` : 'Archive plot?'}
-        description="The plot is hidden from the grid but its task prices are kept. You can restore it from Show archived."
+        title={plotToDelete ? `Archive unit ${plotToDelete.plot_name}?` : 'Archive unit?'}
+        description="The unit is hidden from the grid but its task prices are kept. You can restore it from Show archived."
       />
 
       <Dialog open={archivedModalOpen} onOpenChange={setArchivedModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archived plots</DialogTitle>
+            <DialogTitle>Archived units</DialogTitle>
           </DialogHeader>
           <div className="py-2">
             {archivedLoading ? (
               <div className="text-sm text-muted-foreground">Loading…</div>
             ) : archivedPlots.length === 0 ? (
-              <div className="text-sm text-muted-foreground italic">No archived plots</div>
+              <div className="text-sm text-muted-foreground italic">No archived units</div>
             ) : (
               <ul className="divide-y border rounded-md">
                 {archivedPlots.map(p => (
                   <li key={p.id} className="flex items-center gap-3 px-3 py-2">
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium">Plot {p.plot_name}</div>
+                      <div className="font-medium">Unit {p.plot_name}</div>
                       <div className="text-xs text-muted-foreground">
                         {p.sections.length === 0
                           ? 'No tasks'
@@ -1513,7 +1625,7 @@ export function PlotPriceGrid({ siteId }: Props) {
                       size="sm"
                       variant="destructive"
                       onClick={() => setPlotToHardDelete(p)}
-                      title="Permanently delete this plot and all its data"
+                      title="Permanently delete this unit and all its data"
                     >
                       <Trash2 className="h-3.5 w-3.5 mr-1" />
                       Delete
@@ -1538,7 +1650,7 @@ export function PlotPriceGrid({ siteId }: Props) {
             ? `Delete variation "${variationToDelete.name}"?`
             : 'Delete variation?'
         }
-        description="This removes the variation column from every plot on this site."
+        description="This removes the variation column from every unit on this site."
       />
 
       <ConfirmDialog
@@ -1547,18 +1659,18 @@ export function PlotPriceGrid({ siteId }: Props) {
         onConfirm={handleHardDeletePlot}
         title={
           plotToHardDelete
-            ? `Permanently delete plot ${plotToHardDelete.plot_name}?`
-            : 'Delete plot?'
+            ? `Permanently delete unit ${plotToHardDelete.plot_name}?`
+            : 'Delete unit?'
         }
-        description="This permanently removes the plot and all of its task data. This cannot be undone."
+        description="This permanently removes the unit and all of its task data. This cannot be undone."
       />
 
       <ConfirmDialog
         open={bulkDeleteOpen}
         onClose={() => setBulkDeleteOpen(false)}
         onConfirm={handleBulkDelete}
-        title={`Permanently delete ${selectedPlotIds.size} plot${selectedPlotIds.size === 1 ? '' : 's'}?`}
-        description="This permanently removes the selected plots and all of their task data. This cannot be undone."
+        title={`Permanently delete ${selectedPlotIds.size} unit${selectedPlotIds.size === 1 ? '' : 's'}?`}
+        description="This permanently removes the selected units and all of their task data. This cannot be undone."
       />
 
       <BackToTop />

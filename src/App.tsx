@@ -1,14 +1,14 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/AppLayout";
 import Login from "./pages/Login";
+import Dashboard from "./pages/Dashboard";
 import Developers from "./pages/Clients";
-import TaskTemplates from "./pages/TaskTemplates";
-
-const queryClient = new QueryClient();
+import Settings from "./pages/Settings";
+import Users from "./pages/Users";
+import ResetPassword from "./pages/ResetPassword";
 
 function ProtectedRoutes() {
   const { user, loading } = useAuth();
@@ -19,25 +19,27 @@ function ProtectedRoutes() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/" element={<Navigate to="/developers" replace />} />
+        <Route path="/" element={<Dashboard />} />
         <Route path="/developers" element={<Developers />} />
-        <Route path="/task-templates" element={<TaskTemplates />} />
+        <Route path="/settings" element={<Settings />} />
+        <Route path="/users" element={<Users />} />
       </Routes>
     </AppLayout>
   );
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Sonner />
-      <AuthProvider>
-        <BrowserRouter>
-          <ProtectedRoutes />
-        </BrowserRouter>
-      </AuthProvider>
-    </TooltipProvider>
-  </QueryClientProvider>
+  <TooltipProvider>
+    <Sonner />
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="*" element={<ProtectedRoutes />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  </TooltipProvider>
 );
 
 export default App;

@@ -137,69 +137,60 @@ function SiteInfoPanel({
   };
 
   if (loading) {
-    return <div className="rounded-lg bg-card p-6 text-muted-foreground">Loading site…</div>;
+    return <div className="text-muted-foreground text-sm">Loading site…</div>;
   }
 
   return (
-    <div className="rounded-lg bg-card p-6 space-y-4">
-      {/* Uniform bar of site info fields. All four share the same height,
-          padding, font size and border treatment so they read as one row. */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="site-name" className="text-2xl font-bold uppercase tracking-widest text-foreground">
-            Site Name
-          </Label>
+    <div className="border rounded-lg bg-card divide-y divide-border">
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+        <div className="px-4 py-3 space-y-1">
+          <Label htmlFor="site-name" className="text-xs text-muted-foreground">Site Name</Label>
           <Input
             id="site-name"
             value={name}
             onChange={e => setName(e.target.value)}
             onBlur={handleNameBlur}
-            className="h-10 px-3 text-sm"
+            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0 font-medium"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="site-address" className="text-2xl font-bold uppercase tracking-widest text-foreground">
-            Site Address
-          </Label>
+        <div className="px-4 py-3 space-y-1">
+          <Label htmlFor="site-address" className="text-xs text-muted-foreground">Address</Label>
           <Input
             id="site-address"
             value={address}
             onChange={e => setAddress(e.target.value)}
             onBlur={handleAddressBlur}
-            className="h-10 px-3 text-sm"
+            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="site-grid-ref" className="text-2xl font-bold uppercase tracking-widest text-foreground">
-            Grid Reference
-          </Label>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+        <div className="px-4 py-3 space-y-1">
+          <Label htmlFor="site-grid-ref" className="text-xs text-muted-foreground">Grid Reference</Label>
           <Input
             id="site-grid-ref"
             value={gridRef}
             onChange={e => setGridRef(e.target.value)}
             onBlur={handleGridRefBlur}
-            className="h-10 px-3 text-sm"
+            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
           />
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-2xl font-bold uppercase tracking-widest text-foreground">
-            Site Plans
-          </Label>
+        <div className="px-4 py-3 space-y-1">
+          <Label className="text-xs text-muted-foreground">Site Plans</Label>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="h-10 w-full px-3 text-sm flex items-center gap-2
-                           rounded-md border border-input bg-background text-muted-foreground
-                           hover:text-foreground hover:border-border transition-colors"
+                className="h-8 w-full px-2 text-sm flex items-center gap-2 rounded
+                           text-muted-foreground hover:text-foreground transition-colors"
               >
-                <FileText className="h-4 w-4 shrink-0" />
+                <FileText className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate flex-1 text-left">
                   {plans.length > 0
                     ? `${plans.length} file${plans.length === 1 ? '' : 's'}`
                     : 'No files'}
                 </span>
-                <ChevronDown className="h-4 w-4 shrink-0" />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-72">

@@ -1,5 +1,5 @@
 import {
-  Building2, ListChecks, LogOut
+  Building2, ListChecks, LogOut, Users as UsersIcon
 } from 'lucide-react';
 import cordecLogo from '@/assets/cordec-logo.png';
 import { NavLink } from '@/components/NavLink';
@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 const entities = [
   { title: 'Developers', url: '/developers', icon: Building2 },
   { title: 'Task Templates', url: '/task-templates', icon: ListChecks },
+  { title: 'Users', url: '/users', icon: UsersIcon },
 ];
 
 export function AppSidebar() {

@@ -4,48 +4,49 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { Plus, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Plus, ChevronUp, ChevronDown, Archive as ArchiveIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface TaskTemplate {
   id: string;
   name: string;
-  type: 'internal' | 'external';
+  type: 'internal' | 'garage' | 'external';
   sort_order: number;
   is_default: boolean;
 }
 
-const GROUPS: Array<{ type: 'internal' | 'external'; label: string }> = [
+const GROUPS: Array<{ type: 'internal' | 'garage' | 'external'; label: string }> = [
   { type: 'internal', label: 'Internal' },
+  { type: 'garage', label: 'Garages' },
   { type: 'external', label: 'External' },
 ];
 
-export default function TaskTemplates() {
+export function TaskTemplatesSection() {
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [archived, setArchived] = useState<TaskTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<TaskTemplate | null>(null);
-  const [form, setForm] = useState<{ name: string; type: 'internal' | 'external'; is_default: boolean }>({
+  const [form, setForm] = useState<{ name: string; type: 'internal' | 'garage' | 'external'; is_default: boolean }>({
     name: '',
     type: 'internal',
     is_default: true,
   });
-  const [deleteId, setDeleteId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const fetchTemplates = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('task_templates')
-      .select('*')
-      .eq('archived', false)
-      .order('type', { ascending: true })
-      .order('sort_order', { ascending: true });
-    if (error) toast.error('Failed to load: ' + error.message);
-    else setTemplates((data || []) as TaskTemplate[]);
+    const [activeRes, archivedRes] = await Promise.all([
+      supabase.from('task_templates').select('*').eq('archived', false).order('type').order('sort_order'),
+      supabase.from('task_templates').select('*').eq('archived', true).order('type').order('name'),
+    ]);
+    if (activeRes.error) toast.error('Failed to load: ' + activeRes.error.message);
+    else setTemplates((activeRes.data || []) as TaskTemplate[]);
+    setArchived((archivedRes.data || []) as TaskTemplate[]);
     setLoading(false);
   };
 
@@ -86,18 +87,20 @@ export default function TaskTemplates() {
     setSaving(false);
   };
 
-  const handleDelete = async () => {
-    if (!deleteId) return;
-    // Soft delete: archived templates no longer auto-add to new plots and disappear
-    // from the price grid, but existing plot_tasks rows that reference them stay
-    // intact for historical reporting.
-    const { error } = await supabase
-      .from('task_templates')
-      .update({ archived: true })
-      .eq('id', deleteId);
-    if (error) toast.error('Delete failed: ' + error.message);
-    else { toast.success('Deleted'); fetchTemplates(); }
-    setDeleteId(null);
+  const handleArchive = async (id: string) => {
+    const { error } = await supabase.from('task_templates').update({ archived: true }).eq('id', id);
+    if (error) toast.error('Archive failed: ' + error.message);
+    else { toast.success('Task archived'); fetchTemplates(); }
+  };
+
+  const handleRestore = async (id: string) => {
+    const { error } = await supabase.from('task_templates').update({ archived: false }).eq('id', id);
+    if (error) toast.error('Restore failed: ' + error.message);
+    else {
+      toast.success('Task restored');
+      await fetchTemplates();
+      if (archived.length <= 1) setShowArchived(false);
+    }
   };
 
   const move = async (template: TaskTemplate, dir: -1 | 1) => {
@@ -116,87 +119,112 @@ export default function TaskTemplates() {
         return t;
       })
     );
-    const [r1, r2] = await Promise.all([
+    await Promise.all([
       supabase.from('task_templates').update({ sort_order: b }).eq('id', template.id),
       supabase.from('task_templates').update({ sort_order: a }).eq('id', swap.id),
     ]);
-    if (r1.error || r2.error) {
-      toast.error('Reorder failed');
-      fetchTemplates();
-    }
   };
 
-  const renderGroup = (groupType: 'internal' | 'external', label: string) => {
+  const renderGroup = (groupType: 'internal' | 'garage' | 'external', label: string) => {
     const group = templates
       .filter(t => t.type === groupType)
       .sort((a, b) => a.sort_order - b.sort_order);
+    if (group.length === 0) return null;
     return (
-      <div key={groupType} className="space-y-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{label}</h3>
-        {group.length === 0 ? (
-          <p className="text-sm text-muted-foreground italic">No {label.toLowerCase()} templates</p>
-        ) : (
-          <div className="space-y-2">
-            {group.map((t, idx) => (
-              <div key={t.id} className="border rounded-lg p-3 flex items-center gap-3 bg-card">
-                <div className="flex flex-col">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5"
-                    disabled={idx === 0}
-                    onClick={() => move(t, -1)}
-                  >
-                    <ChevronUp className="h-3 w-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5"
-                    disabled={idx === group.length - 1}
-                    onClick={() => move(t, 1)}
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium">{t.name}</div>
-                  {!t.is_default && (
-                    <div className="text-xs text-muted-foreground">Not auto-added to new plots</div>
-                  )}
-                </div>
-                <Button variant="ghost" size="icon" onClick={() => openEdit(t)}>
-                  <Pencil className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="icon" onClick={() => setDeleteId(t.id)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
-            ))}
+      <div key={groupType}>
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">{label}</h3>
+        <div className="border rounded-md divide-y divide-border">
+        {group.map((t, idx) => (
+          <div
+            key={t.id}
+            className="flex items-center gap-2 py-2 px-3 hover:bg-muted/50 cursor-pointer text-sm"
+            onClick={() => openEdit(t)}
+          >
+            <div className="flex flex-col gap-0">
+              <button
+                type="button"
+                className="h-3.5 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                disabled={idx === 0}
+                onClick={e => { e.stopPropagation(); move(t, -1); }}
+              >
+                <ChevronUp className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                className="h-3.5 text-muted-foreground hover:text-foreground disabled:opacity-20"
+                disabled={idx === group.length - 1}
+                onClick={e => { e.stopPropagation(); move(t, 1); }}
+              >
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </div>
+            <span className="flex-1 font-medium">{t.name}</span>
+            {!t.is_default && (
+              <Badge variant="secondary" className="text-xs">Manual</Badge>
+            )}
+            <button
+              type="button"
+              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-accent"
+              onClick={e => { e.stopPropagation(); handleArchive(t.id); }}
+              title="Archive"
+            >
+              <ArchiveIcon className="h-3.5 w-3.5" />
+            </button>
           </div>
-        )}
+        ))}
+        </div>
       </div>
     );
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Task Templates</h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Default tasks copied onto every new plot. Changes only affect plots created after this point.
-          </p>
+        <p className="text-sm text-muted-foreground">
+          Default tasks for new plots.
+        </p>
+        <div className="flex items-center gap-2">
+          {archived.length > 0 && (
+            <Button
+              size="sm"
+              variant={showArchived ? 'default' : 'outline'}
+              onClick={() => setShowArchived(s => !s)}
+            >
+              <ArchiveIcon className="mr-2 h-3.5 w-3.5" />
+              Archived tasks ({archived.length})
+            </Button>
+          )}
+          <Button size="sm" onClick={openCreate}>
+            <Plus className="mr-2 h-4 w-4" />Add template
+          </Button>
         </div>
-        <Button onClick={openCreate}>
-          <Plus className="mr-2 h-4 w-4" />Add template
-        </Button>
       </div>
 
       {loading ? (
-        <div className="text-muted-foreground">Loading…</div>
+        <div className="text-muted-foreground text-sm">Loading…</div>
+      ) : showArchived ? (
+        <div className="space-y-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Archived Tasks</h3>
+          {archived.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No archived tasks</p>
+          ) : (
+            <div className="border rounded-md divide-y divide-border">
+              {archived.map(t => (
+                <div key={t.id} className="flex items-center gap-2 py-2 px-3 text-sm text-muted-foreground">
+                  <span className="flex-1">{t.name}</span>
+                  <Badge variant="secondary" className="text-xs">{t.type}</Badge>
+                  <Button variant="outline" size="sm" onClick={() => handleRestore(t.id)}>
+                    Restore
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       ) : (
-        GROUPS.map(g => renderGroup(g.type, g.label))
+        <div className="space-y-3">
+          {GROUPS.map(g => renderGroup(g.type, g.label))}
+        </div>
       )}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -211,10 +239,11 @@ export default function TaskTemplates() {
             </div>
             <div className="space-y-1.5">
               <Label>Type</Label>
-              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as 'internal' | 'external' }))}>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v as 'internal' | 'garage' | 'external' }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="internal">Internal</SelectItem>
+                  <SelectItem value="garage">Garage</SelectItem>
                   <SelectItem value="external">External</SelectItem>
                 </SelectContent>
               </Select>
@@ -236,8 +265,6 @@ export default function TaskTemplates() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} />
     </div>
   );
 }
