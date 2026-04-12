@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -45,8 +46,19 @@ interface ContactRow {
   phone: string | null;
   default_role: string | null;
   is_archived: boolean;
+  notify_issue_report: boolean;
+  notify_hourly_agreement: boolean;
+  notify_sign_off: boolean;
+  notify_quality_report: boolean;
   assignments: SiteAssignment[];
 }
+
+const NOTIFICATION_FIELDS = [
+  { key: 'notify_issue_report', label: 'Issue Reports' },
+  { key: 'notify_hourly_agreement', label: 'Hourly Agreements' },
+  { key: 'notify_sign_off', label: 'Sign Offs' },
+  { key: 'notify_quality_report', label: 'Quality Reports' },
+] as const;
 
 export function DeveloperContacts({ developerId }: { developerId: string }) {
   const [contacts, setContacts] = useState<ContactRow[]>([]);
@@ -98,7 +110,7 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
     setLoading(true);
     const { data, error } = await supabase
       .from('contacts')
-      .select('id, first_name, last_name, email, phone, default_role, is_archived, site_contacts(role, site_id, site:sites(name))')
+      .select('id, first_name, last_name, email, phone, default_role, is_archived, notify_issue_report, notify_hourly_agreement, notify_sign_off, notify_quality_report, site_contacts(role, site_id, site:sites(name))')
       .eq('developer_id', developerId)
       .order('last_name');
     if (error) {
@@ -115,6 +127,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
         phone: c.phone,
         default_role: c.default_role,
         is_archived: c.is_archived,
+        notify_issue_report: c.notify_issue_report,
+        notify_hourly_agreement: c.notify_hourly_agreement,
+        notify_sign_off: c.notify_sign_off,
+        notify_quality_report: c.notify_quality_report,
         assignments: (c.site_contacts || []).map((sc: any) => ({
           site_id: sc.site_id,
           site_name: sc.site?.name ?? 'Unknown',
@@ -275,6 +291,21 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
     toast.success('Contact deleted');
   };
 
+  const toggleNotification = async (contactId: string, field: typeof NOTIFICATION_FIELDS[number]['key'], value: boolean) => {
+    const { error } = await supabase
+      .from('contacts')
+      .update({ [field]: value })
+      .eq('id', contactId);
+    if (error) {
+      toast.error('Failed to update notification preference');
+      return;
+    }
+    setContacts(prev => prev.map(c => c.id === contactId ? { ...c, [field]: value } : c));
+    if (editing?.id === contactId) {
+      setEditing(prev => prev ? { ...prev, [field]: value } : prev);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -354,28 +385,25 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
           No contacts yet. Click "Add Contact" to create one.
         </p>
       ) : (
-        <div className="border rounded-lg bg-card">
-          <Table className="table-fixed">
-            <colgroup>
-              <col className="w-[30%]" />
-              <col className="w-[25%]" />
-              <col className="w-[30%]" />
-              <col className="w-[15%]" />
-            </colgroup>
+        <div className="border rounded-lg bg-card overflow-x-auto">
+          <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="h-9">
+                <TableHead className="h-9 min-w-[160px]">
                   <button type="button" onClick={() => toggleSort('name')} className="inline-flex items-center gap-1 hover:text-foreground">
                     Name <ArrowUpDown className="h-3 w-3" />
                   </button>
                 </TableHead>
-                <TableHead className="h-9">
+                <TableHead className="h-9 min-w-[140px]">
                   <button type="button" onClick={() => toggleSort('role')} className="inline-flex items-center gap-1 hover:text-foreground">
                     Role <ArrowUpDown className="h-3 w-3" />
                   </button>
                 </TableHead>
-                <TableHead className="h-9">Assigned Sites</TableHead>
-                <TableHead className="h-9 text-center">Actions</TableHead>
+                <TableHead className="h-9 min-w-[160px]">Assigned Sites</TableHead>
+                {NOTIFICATION_FIELDS.map(({ key, label }) => (
+                  <TableHead key={key} className="h-9 text-center min-w-[100px]">{label}</TableHead>
+                ))}
+                <TableHead className="h-9 text-center min-w-[70px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -404,6 +432,14 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
                       </div>
                     )}
                   </TableCell>
+                  {NOTIFICATION_FIELDS.map(({ key }) => (
+                    <TableCell key={key} className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                      <Switch
+                        checked={c[key]}
+                        onCheckedChange={(checked) => toggleNotification(c.id, key, checked)}
+                      />
+                    </TableCell>
+                  ))}
                   <TableCell className="py-2 text-center" onClick={e => e.stopPropagation()}>
                     <Button
                       variant="ghost"
