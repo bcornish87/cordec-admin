@@ -728,7 +728,7 @@ export default function Users() {
   const fetchUsers = async () => {
     setLoading(true);
     const [profilesRes, rolesRes, pendingRes] = await Promise.all([
-      supabase.from('profiles').select('*').neq('status', 'pending'),
+      supabase.from('profiles').select('*').or('status.eq.approved,status.is.null'),
       supabase.from('user_roles').select('*'),
       supabase.from('profiles')
         .select('id, user_id, first_name, last_name, email, phone, sort_code, account_number, national_insurance_number, utr_number, created_at')
