@@ -12,7 +12,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Save, ChevronDown, UserX, Plus, Check, X, Clock } from 'lucide-react';
+import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Save, ChevronDown, UserX, Plus, Check, X, Clock, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePendingUsers } from '@/contexts/PendingUsersContext';
 
@@ -512,14 +512,17 @@ function PendingSection({ users, onAction }: {
 /*  Main list                                                          */
 /* ------------------------------------------------------------------ */
 
-function UserTable({ label, users, onSelect, onUpdate }: {
+function UserTable({ label, users, onSelect, onUpdate, onDelete }: {
   label: string;
   users: UserRow[];
   onSelect: (u: UserRow) => void;
   onUpdate: (u: UserRow, patch: { role?: string; is_active?: boolean }) => void;
+  onDelete?: (u: UserRow) => void;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>('name');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
+  const [confirmDelete, setConfirmDelete] = useState<UserRow | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -549,10 +552,11 @@ function UserTable({ label, users, onSelect, onUpdate }: {
       <div className="border rounded-lg bg-card">
         <Table className="table-fixed">
           <colgroup>
-            <col className="w-[35%]" />
+            <col className={onDelete ? "w-[30%]" : "w-[35%]"} />
             <col className="w-[20%]" />
-            <col className="w-[25%]" />
+            <col className={onDelete ? "w-[20%]" : "w-[25%]"} />
             <col className="w-[20%]" />
+            {onDelete && <col className="w-[10%]" />}
           </colgroup>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -566,6 +570,7 @@ function UserTable({ label, users, onSelect, onUpdate }: {
                 Hourly Rate <SortIcon col="rate" />
               </TableHead>
               <TableHead className="h-9 text-center">Status</TableHead>
+              {onDelete && <TableHead className="h-9" />}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -613,11 +618,53 @@ function UserTable({ label, users, onSelect, onUpdate }: {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
+                {onDelete && (
+                  <TableCell className="py-2 text-center" onClick={e => e.stopPropagation()}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-red-500 hover:text-red-400 hover:bg-red-500/10"
+                      onClick={() => setConfirmDelete(u)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TableCell>
+                )}
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </div>
+
+      {onDelete && (
+        <Dialog open={!!confirmDelete} onOpenChange={open => { if (!open) setConfirmDelete(null); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete User</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Permanently delete <span className="font-medium text-foreground">{confirmDelete && fullName(confirmDelete)}</span>? This cannot be undone.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</Button>
+              <Button
+                variant="destructive"
+                disabled={deleting}
+                onClick={async () => {
+                  if (!confirmDelete) return;
+                  setDeleting(true);
+                  await onDelete(confirmDelete);
+                  setDeleting(false);
+                  setConfirmDelete(null);
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {deleting ? 'Deleting…' : 'Delete'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
@@ -761,6 +808,18 @@ export default function Users() {
     refreshPendingCount();
   };
 
+  const handleDeleteUser = async (user: UserRow) => {
+    const { error } = await supabase.rpc('hard_delete_user', {
+      _user_id: user.user_id,
+    });
+    if (error) {
+      toast.error('Failed to delete user: ' + error.message);
+    } else {
+      toast.success('User deleted');
+      setUsers(prev => prev.filter(u => u.id !== user.id));
+    }
+  };
+
   if (selected) {
     return (
       <UserDetail
@@ -809,7 +868,7 @@ export default function Users() {
         <>
           <PendingSection users={pendingUsers} onAction={handlePendingAction} />
           {showInactive ? (
-            <UserTable label="Inactive Users" users={inactive} onSelect={setSelected} onUpdate={handleInlineUpdate} />
+            <UserTable label="Inactive Users" users={inactive} onSelect={setSelected} onUpdate={handleInlineUpdate} onDelete={handleDeleteUser} />
           ) : (
             <>
               <UserTable label="Staff" users={staff} onSelect={setSelected} onUpdate={handleInlineUpdate} />
