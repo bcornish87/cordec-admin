@@ -28,6 +28,10 @@ interface UserRow {
   email: string | null;
   phone: string | null;
   post_code: string | null;
+  sort_code: string | null;
+  account_number: string | null;
+  national_insurance_number: string | null;
+  utr_number: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -123,6 +127,10 @@ interface DetailForm {
   email: string;
   phone: string;
   post_code: string;
+  sort_code: string;
+  account_number: string;
+  national_insurance_number: string;
+  utr_number: string;
   is_active: boolean;
   role: string;
   rate: string;
@@ -139,6 +147,10 @@ function UserDetail({ user, onBack, onSaved }: {
     email: user.email ?? '',
     phone: user.phone ? formatPhone(user.phone) : '',
     post_code: user.post_code ? formatPostCode(user.post_code) : '',
+    sort_code: user.sort_code ?? '',
+    account_number: user.account_number ?? '',
+    national_insurance_number: user.national_insurance_number ?? '',
+    utr_number: user.utr_number ?? '',
     is_active: user.is_active,
     role: user.role ?? 'decorator',
     rate: user.rate != null ? String(user.rate) : '18',
@@ -181,6 +193,10 @@ function UserDetail({ user, onBack, onSaved }: {
       email: form.email.trim().toLowerCase() || null,
       phone: form.phone.trim() ? formatPhone(form.phone.trim()) : null,
       post_code: form.post_code.trim() ? formatPostCode(form.post_code.trim()) : null,
+      sort_code: form.sort_code.trim() || null,
+      account_number: form.account_number.trim() || null,
+      national_insurance_number: form.national_insurance_number.trim().toUpperCase() || null,
+      utr_number: form.utr_number.trim() || null,
       is_active: form.is_active,
     };
 
@@ -306,6 +322,30 @@ function UserDetail({ user, onBack, onSaved }: {
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Financial details */}
+      <div className="border rounded-lg p-4 bg-card space-y-4">
+        {section('Financial Details', (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="space-y-1.5">
+              <Label>Sort Code</Label>
+              <Input value={form.sort_code} onChange={e => set('sort_code', e.target.value)} placeholder="00-00-00" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Account Number</Label>
+              <Input value={form.account_number} onChange={e => set('account_number', e.target.value)} placeholder="12345678" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>National Insurance</Label>
+              <Input value={form.national_insurance_number} onChange={e => set('national_insurance_number', e.target.value)} onBlur={() => set('national_insurance_number', form.national_insurance_number.toUpperCase())} placeholder="AB 12 34 56 C" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>UTR Number</Label>
+              <Input value={form.utr_number} onChange={e => set('utr_number', e.target.value)} placeholder="1234567890" />
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Activity tables */}
@@ -678,7 +718,9 @@ export default function Users() {
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({
     first_name: '', last_name: '', email: '', password: '',
-    phone: '', post_code: '', role: 'decorator', rate: '18',
+    phone: '', post_code: '', sort_code: '', account_number: '',
+    national_insurance_number: '', utr_number: '',
+    role: 'decorator', rate: '18',
   });
   const [addSaving, setAddSaving] = useState(false);
   const { refreshPendingCount } = usePendingUsers();
@@ -772,6 +814,10 @@ export default function Users() {
       _last_name: last,
       _phone: addForm.phone.trim() ? formatPhone(addForm.phone.trim()) : null,
       _post_code: addForm.post_code.trim() ? formatPostCode(addForm.post_code.trim()) : null,
+      _sort_code: addForm.sort_code.trim() || null,
+      _account_number: addForm.account_number.trim() || null,
+      _national_insurance_number: addForm.national_insurance_number.trim().toUpperCase() || null,
+      _utr_number: addForm.utr_number.trim() || null,
       _role: addForm.role,
       _rate: parseFloat(addForm.rate) || 18,
     });
@@ -780,7 +826,7 @@ export default function Users() {
     } else {
       toast.success('User created');
       setAddOpen(false);
-      setAddForm({ first_name: '', last_name: '', email: '', password: '', phone: '', post_code: '', role: 'decorator', rate: '18' });
+      setAddForm({ first_name: '', last_name: '', email: '', password: '', phone: '', post_code: '', sort_code: '', account_number: '', national_insurance_number: '', utr_number: '', role: 'decorator', rate: '18' });
       fetchUsers();
     }
     setAddSaving(false);
@@ -854,7 +900,7 @@ export default function Users() {
               Inactive ({inactive.length})
             </Button>
           )}
-          <Button onClick={() => { setAddForm({ first_name: '', last_name: '', email: '', password: '', phone: '', post_code: '', role: 'decorator', rate: '18' }); setAddOpen(true); }}>
+          <Button onClick={() => { setAddForm({ first_name: '', last_name: '', email: '', password: '', phone: '', post_code: '', sort_code: '', account_number: '', national_insurance_number: '', utr_number: '', role: 'decorator', rate: '18' }); setAddOpen(true); }}>
             <Plus className="mr-2 h-4 w-4" />Add User
           </Button>
         </div>
@@ -907,6 +953,22 @@ export default function Users() {
             <div className="space-y-1.5">
               <Label>Post Code</Label>
               <Input value={addForm.post_code} onChange={e => setAddForm(f => ({ ...f, post_code: e.target.value }))} onBlur={() => setAddForm(f => ({ ...f, post_code: formatPostCode(f.post_code) }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Sort Code</Label>
+              <Input value={addForm.sort_code} onChange={e => setAddForm(f => ({ ...f, sort_code: e.target.value }))} placeholder="00-00-00" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Account Number</Label>
+              <Input value={addForm.account_number} onChange={e => setAddForm(f => ({ ...f, account_number: e.target.value }))} placeholder="12345678" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>National Insurance</Label>
+              <Input value={addForm.national_insurance_number} onChange={e => setAddForm(f => ({ ...f, national_insurance_number: e.target.value }))} onBlur={() => setAddForm(f => ({ ...f, national_insurance_number: f.national_insurance_number.toUpperCase() }))} placeholder="AB 12 34 56 C" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>UTR Number</Label>
+              <Input value={addForm.utr_number} onChange={e => setAddForm(f => ({ ...f, utr_number: e.target.value }))} placeholder="1234567890" />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
