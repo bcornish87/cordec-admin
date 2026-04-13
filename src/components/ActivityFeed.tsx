@@ -20,6 +20,7 @@ interface FeedItem {
   id: string;
   form_type: FormType;
   submitted_by: string;
+  site_id: string | null;
   site_name: string | null;
   plot_name: string | null;
   created_at: string;
@@ -237,6 +238,7 @@ function renderGenericDetail(record: any, submittedBy: string) {
 interface RawRow {
   id: string;
   user_id: string;
+  site_id?: string | null;
   site_name?: string | null;
   plot_name?: string | null;
   status?: string | null;
@@ -303,6 +305,7 @@ async function fetchFeed(filters: {
     id: row.id,
     form_type: cfg.formType,
     submitted_by: nameMap.get(row.user_id) || 'Unknown',
+    site_id: row.site_id || null,
     site_name: row.site_name || null,
     plot_name: row.plot_name || null,
     created_at: row.created_at,
@@ -509,67 +512,75 @@ export default function ActivityFeed() {
         </div>
       </div>
 
-      {/* Feed list */}
-      <div className="divide-y divide-border">
-        {!loading && items.length === 0 && (
-          <div className="px-5 py-8 text-center text-sm text-muted-foreground">
-            No submissions found
-          </div>
-        )}
-        {items.map((item) => {
-          const config = FORM_TYPE_CONFIG[item.form_type];
-          const Icon = config.icon;
-          const isPending = item.status && ['pending', 'submitted'].includes(item.status.toLowerCase());
+      {/* Feed table */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border/60">
+              <th className="px-5 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Type</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted by</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Developer</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Site</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
+              <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground w-10"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border">
+            {!loading && items.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                  No submissions found
+                </td>
+              </tr>
+            )}
+            {items.map((item) => {
+              const config = FORM_TYPE_CONFIG[item.form_type];
+              const Icon = config.icon;
+              const isPending = item.status && ['pending', 'submitted'].includes(item.status.toLowerCase());
 
-          return (
-            <div
-              key={`${item.source_table}-${item.id}`}
-              className={`flex items-center gap-4 px-5 py-3 cursor-pointer transition-colors hover:bg-muted/50 ${
-                isPending ? 'border-l-2 border-l-amber-500' : ''
-              }`}
-              onClick={() => handleRowClick(item)}
-            >
-              {/* Icon */}
-              <div className={`shrink-0 ${config.colour}`}>
-                <Icon className="h-4 w-4" />
-              </div>
+              // Resolve developer name from site_id
+              const site = item.site_id ? sites.find(s => s.id === item.site_id) : null;
+              const developer = site ? developers.find(d => d.id === site.developer_id) : null;
 
-              {/* Main content */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {item.form_type}
-                  </span>
-                  {statusBadge(item.status)}
-                </div>
-                <p className="text-sm mt-0.5 truncate">
-                  <span className="font-medium">{item.submitted_by}</span>
-                  {item.site_name && (
-                    <span className="text-muted-foreground">
-                      {' — '}{item.site_name}
-                      {item.plot_name && `, ${item.plot_name}`}
-                    </span>
-                  )}
-                </p>
-              </div>
-
-              {/* Timestamp + delete */}
-              <div className="shrink-0 text-xs text-muted-foreground">
-                {timeAgo(item.created_at)}
-              </div>
-              <button
-                className="shrink-0 p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors"
-                title="Delete submission"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setConfirmDelete(item);
-                }}
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          );
-        })}
+              return (
+                <tr
+                  key={`${item.source_table}-${item.id}`}
+                  className={`cursor-pointer transition-colors hover:bg-muted/50 ${
+                    isPending ? 'border-l-2 border-l-amber-500' : ''
+                  }`}
+                  onClick={() => handleRowClick(item)}
+                >
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2">
+                      <Icon className={`h-4 w-4 shrink-0 ${config.colour}`} />
+                      <span className="font-medium whitespace-nowrap">{item.form_type}</span>
+                      {statusBadge(item.status)}
+                    </div>
+                  </td>
+                  <td className="px-3 py-3 whitespace-nowrap">{item.submitted_by}</td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{developer?.name || '—'}</td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
+                    {item.site_name || '—'}
+                    {item.plot_name && <span className="text-xs ml-1">Plot {item.plot_name}</span>}
+                  </td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap text-xs">{timeAgo(item.created_at)}</td>
+                  <td className="px-3 py-3 text-right">
+                    <button
+                      className="p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                      title="Delete submission"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setConfirmDelete(item);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Detail dialog */}
