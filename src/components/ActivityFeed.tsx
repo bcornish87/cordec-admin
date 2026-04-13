@@ -521,6 +521,7 @@ export default function ActivityFeed() {
               <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Submitted by</th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Developer</th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Site</th>
+              <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Unit</th>
               <th className="px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">Date</th>
               <th className="px-3 py-2.5 text-right text-xs font-semibold uppercase tracking-wide text-muted-foreground w-10"></th>
             </tr>
@@ -528,7 +529,7 @@ export default function ActivityFeed() {
           <tbody className="divide-y divide-border">
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-5 py-8 text-center text-sm text-muted-foreground">
+                <td colSpan={7} className="px-5 py-8 text-center text-sm text-muted-foreground">
                   No submissions found
                 </td>
               </tr>
@@ -559,10 +560,8 @@ export default function ActivityFeed() {
                   </td>
                   <td className="px-3 py-3 whitespace-nowrap">{item.submitted_by}</td>
                   <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{developer?.name || '—'}</td>
-                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">
-                    {item.site_name || '—'}
-                    {item.plot_name && <span className="text-xs ml-1">Plot {item.plot_name}</span>}
-                  </td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{item.site_name || '—'}</td>
+                  <td className="px-3 py-3 text-muted-foreground whitespace-nowrap">{item.plot_name || '—'}</td>
                   <td className="px-3 py-3 text-muted-foreground whitespace-nowrap text-xs">{timeAgo(item.created_at)}</td>
                   <td className="px-3 py-3 text-right">
                     <button
