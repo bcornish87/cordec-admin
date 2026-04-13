@@ -1,6 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
+
+// Fix default marker icons (Leaflet + bundlers issue)
+delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+});
 
 interface SiteLocation {
   id: string;
@@ -12,22 +22,19 @@ interface SiteLocation {
 export default function SiteMap() {
   const [sites, setSites] = useState<SiteLocation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<unknown>(null);
+  const mapRef = useRef<L.Map | null>(null);
 
-  // Fetch sites
   useEffect(() => {
     (async () => {
-      const { data, error: err } = await supabase
+      const { data, error } = await supabase
         .from('sites')
         .select('id, name, latitude, longitude')
         .eq('is_archived', false)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null);
 
-      if (err || !data) {
-        console.error('SiteMap: failed to fetch sites', err);
+      if (error || !data) {
         setLoading(false);
         return;
       }
@@ -44,56 +51,34 @@ export default function SiteMap() {
     })();
   }, []);
 
-  // Initialise Leaflet map once sites are loaded
   useEffect(() => {
     if (loading || sites.length === 0 || !containerRef.current || mapRef.current) return;
 
-    let cancelled = false;
+    const map = L.map(containerRef.current, {
+      scrollWheelZoom: false,
+      dragging: false,
+      doubleClickZoom: false,
+      touchZoom: false,
+      boxZoom: false,
+      keyboard: false,
+      zoomControl: false,
+      attributionControl: false,
+    });
 
-    (async () => {
-      try {
-        const L = await import('leaflet');
-        await import('leaflet/dist/leaflet.css');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-        if (cancelled || !containerRef.current) return;
+    for (const site of sites) {
+      L.marker([site.lat, site.lng]).addTo(map);
+    }
 
-        // Fix marker icons
-        delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-        L.Icon.Default.mergeOptions({
-          iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-          iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-          shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        });
+    const bounds = L.latLngBounds(sites.map((s) => [s.lat, s.lng] as [number, number]));
+    map.fitBounds(bounds, { padding: [40, 10] });
 
-        const map = L.map(containerRef.current, {
-          scrollWheelZoom: false,
-          dragging: false,
-          doubleClickZoom: false,
-          touchZoom: false,
-          boxZoom: false,
-          keyboard: false,
-          zoomControl: false,
-          attributionControl: false,
-        });
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-        for (const site of sites) {
-          L.marker([site.lat, site.lng]).addTo(map);
-        }
-
-        const bounds = L.latLngBounds(sites.map((s) => [s.lat, s.lng] as [number, number]));
-        map.fitBounds(bounds, { padding: [40, 10] });
-
-        mapRef.current = map;
-      } catch (e) {
-        console.error('SiteMap: Leaflet init failed', e);
-        setError(true);
-      }
-    })();
+    mapRef.current = map;
 
     return () => {
-      cancelled = true;
+      map.remove();
+      mapRef.current = null;
     };
   }, [loading, sites]);
 
@@ -115,13 +100,7 @@ export default function SiteMap() {
         )}
       </div>
       <div className="h-[400px] w-full">
-        {error ? (
-          <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-            Map failed to load
-          </div>
-        ) : (
-          <div ref={containerRef} className="h-full w-full" />
-        )}
+        <div ref={containerRef} className="h-full w-full" />
       </div>
     </div>
   );
