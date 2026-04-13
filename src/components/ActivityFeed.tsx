@@ -614,7 +614,11 @@ export default function ActivityFeed() {
       .eq('id', confirmDelete.id);
     setDeleting(false);
     if (error) {
-      toast.error('Failed to delete: ' + error.message);
+      if (error.code === '23503') {
+        toast.error('This submission is linked to an invoice and cannot be deleted');
+      } else {
+        toast.error('Failed to delete: ' + error.message);
+      }
       return;
     }
     toast.success(`${confirmDelete.form_type} deleted`);
