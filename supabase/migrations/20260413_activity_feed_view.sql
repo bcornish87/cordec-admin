@@ -1,6 +1,9 @@
--- Unified activity feed view across all five submission tables.
+-- Unified activity feed view across submission tables.
 -- Used by the Dashboard "Recent Submissions" feed.
 -- Each source table is normalised to a common shape.
+--
+-- NOTE: issue_reports and quality_reports tables do not exist yet.
+-- When they are created, update this view to include them.
 
 CREATE OR REPLACE VIEW activity_feed AS
 
@@ -48,39 +51,7 @@ SELECT
   inv.created_at,
   'invoices'::text          AS source_table
 FROM invoices inv
-LEFT JOIN profiles p ON p.user_id = inv.user_id
-
-UNION ALL
-
-SELECT
-  ir.id,
-  'Issue Report'::text      AS form_type,
-  ir.user_id,
-  p.first_name,
-  p.last_name,
-  ir.site_name,
-  ir.plot_name,
-  ir.status,
-  ir.created_at,
-  'issue_reports'::text     AS source_table
-FROM issue_reports ir
-LEFT JOIN profiles p ON p.user_id = ir.user_id
-
-UNION ALL
-
-SELECT
-  qr.id,
-  'Quality Report'::text    AS form_type,
-  qr.user_id,
-  p.first_name,
-  p.last_name,
-  qr.site_name,
-  qr.plot_name,
-  qr.status,
-  qr.created_at,
-  'quality_reports'::text   AS source_table
-FROM quality_reports qr
-LEFT JOIN profiles p ON p.user_id = qr.user_id;
+LEFT JOIN profiles p ON p.user_id = inv.user_id;
 
 -- Grant read access to authenticated users
 GRANT SELECT ON activity_feed TO authenticated;
