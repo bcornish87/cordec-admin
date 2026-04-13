@@ -286,6 +286,7 @@ function renderInvoiceDetail(record: any, submittedBy: string) {
                   <span className="font-medium">{item.site_name}</span>
                   <span className="text-muted-foreground"> / Plot {item.plot_name}</span>
                   <span className="text-muted-foreground"> / {item.task_type}</span>
+                  {item.price_type && <span className="text-muted-foreground"> ({item.price_type})</span>}
                   {item.note && <p className="text-xs text-muted-foreground mt-0.5">{item.note}</p>}
                 </div>
                 <div className="text-right whitespace-nowrap">
@@ -933,7 +934,7 @@ export default function ActivityFeed() {
 
       {/* Detail dialog */}
       <Dialog open={!!selectedItem} onOpenChange={open => { if (!open) setSelectedItem(null); }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {selectedItem && (() => {
@@ -944,13 +945,15 @@ export default function ActivityFeed() {
               {selectedItem?.form_type}
             </DialogTitle>
           </DialogHeader>
-          {loadingDetail ? (
-            <div className="flex items-center justify-center py-8">
-              <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            renderDetail()
-          )}
+          <div className="overflow-y-auto flex-1 pr-1">
+            {loadingDetail ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              renderDetail()
+            )}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSelectedItem(null)}>Close</Button>
             <Button
