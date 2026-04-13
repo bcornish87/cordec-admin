@@ -26,6 +26,17 @@ const LazyMap = lazy(() =>
         shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
       });
 
+      // Fit map bounds to show all markers
+      function FitBounds({ sites: s }: { sites: SiteLocation[] }) {
+        const map = mod.useMap();
+        useEffect(() => {
+          if (s.length === 0) return;
+          const bounds = L.latLngBounds(s.map((site) => [site.lat, site.lng]));
+          map.fitBounds(bounds, { padding: [30, 30] });
+        }, [map, s]);
+        return null;
+      }
+
       const MapInner = ({ sites }: { sites: SiteLocation[] }) => (
         <mod.MapContainer
           center={UK_CENTER}
@@ -37,6 +48,7 @@ const LazyMap = lazy(() =>
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
+          <FitBounds sites={sites} />
           {sites.map((site) => (
             <mod.Marker key={site.id} position={[site.lat, site.lng]}>
               <mod.Popup>
