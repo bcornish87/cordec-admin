@@ -934,7 +934,7 @@ export default function ActivityFeed() {
 
       {/* Detail dialog */}
       <Dialog open={!!selectedItem} onOpenChange={open => { if (!open) setSelectedItem(null); }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogContent className="max-w-2xl !grid-rows-[auto_1fr_auto] max-h-[85vh]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {selectedItem && (() => {
@@ -945,7 +945,7 @@ export default function ActivityFeed() {
               {selectedItem?.form_type}
             </DialogTitle>
           </DialogHeader>
-          <div className="overflow-y-auto flex-1 pr-1">
+          <div className="overflow-y-auto pr-1 -mr-1">
             {loadingDetail ? (
               <div className="flex items-center justify-center py-8">
                 <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
