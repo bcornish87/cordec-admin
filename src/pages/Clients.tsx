@@ -47,6 +47,8 @@ function SiteInfoPanel({
   const [name, setName] = useState(initialName);
   const [address, setAddress] = useState('');
   const [gridRef, setGridRef] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [plans, setPlans] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,7 +58,7 @@ function SiteInfoPanel({
       setLoading(true);
       const { data, error } = await supabase
         .from('sites')
-        .select('name, address, grid_reference, site_plans')
+        .select('name, address, grid_reference, latitude, longitude, site_plans')
         .eq('id', siteId)
         .single();
       if (cancelled) return;
@@ -68,6 +70,8 @@ function SiteInfoPanel({
       setName(data?.name ?? '');
       setAddress(data?.address ?? '');
       setGridRef(data?.grid_reference ?? '');
+      setLatitude(data?.latitude != null ? String(data.latitude) : '');
+      setLongitude(data?.longitude != null ? String(data.longitude) : '');
       const raw: string = data?.site_plans ?? '';
       setPlans(raw ? raw.split('\n').filter(Boolean) : []);
       setLoading(false);
@@ -97,6 +101,22 @@ function SiteInfoPanel({
 
   const handleAddressBlur = () => saveField('address', address.trim());
   const handleGridRefBlur = () => saveField('grid_reference', gridRef.trim());
+
+  const handleLatBlur = async () => {
+    const val = latitude.trim();
+    const num = val === '' ? null : parseFloat(val);
+    if (val !== '' && (num === null || isNaN(num))) return;
+    const { error } = await supabase.from('sites').update({ latitude: num }).eq('id', siteId);
+    if (error) toast.error('Save failed: ' + error.message);
+  };
+
+  const handleLngBlur = async () => {
+    const val = longitude.trim();
+    const num = val === '' ? null : parseFloat(val);
+    if (val !== '' && (num === null || isNaN(num))) return;
+    const { error } = await supabase.from('sites').update({ longitude: num }).eq('id', siteId);
+    if (error) toast.error('Save failed: ' + error.message);
+  };
 
   const persistPlans = async (next: string[]) => {
     setPlans(next);
@@ -164,7 +184,7 @@ function SiteInfoPanel({
           />
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-border">
+      <div className="grid grid-cols-1 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-border">
         <div className="px-4 py-3 space-y-1">
           <Label htmlFor="site-grid-ref" className="text-xs text-muted-foreground">Grid Reference</Label>
           <Input
@@ -172,6 +192,28 @@ function SiteInfoPanel({
             value={gridRef}
             onChange={e => setGridRef(e.target.value)}
             onBlur={handleGridRefBlur}
+            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
+          />
+        </div>
+        <div className="px-4 py-3 space-y-1">
+          <Label htmlFor="site-lat" className="text-xs text-muted-foreground">Latitude</Label>
+          <Input
+            id="site-lat"
+            value={latitude}
+            onChange={e => setLatitude(e.target.value)}
+            onBlur={handleLatBlur}
+            placeholder="e.g. 50.2631"
+            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
+          />
+        </div>
+        <div className="px-4 py-3 space-y-1">
+          <Label htmlFor="site-lng" className="text-xs text-muted-foreground">Longitude</Label>
+          <Input
+            id="site-lng"
+            value={longitude}
+            onChange={e => setLongitude(e.target.value)}
+            onBlur={handleLngBlur}
+            placeholder="e.g. -5.0512"
             className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
           />
         </div>
@@ -259,6 +301,8 @@ const siteFields: FieldConfig[] = [
   { key: 'developer_id', label: 'Developer', type: 'select', foreignTable: 'developers', foreignLabel: 'name' },
   { key: 'address', label: 'Address', required: true },
   { key: 'grid_reference', label: 'Grid Reference' },
+  { key: 'latitude', label: 'Latitude' },
+  { key: 'longitude', label: 'Longitude' },
   { key: 'site_plans', label: 'Site Plans', type: 'file', bucket: 'site-plans' },
   { key: 'status', label: 'Status', type: 'select', options: [
     { value: 'active', label: 'Active' },
