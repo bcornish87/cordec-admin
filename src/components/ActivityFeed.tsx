@@ -237,20 +237,23 @@ function renderGenericDetail(record: any, submittedBy: string) {
 
 interface RawRow {
   id: string;
-  user_id: string;
+  user_id?: string;
+  submitted_by?: string;
   site_id?: string | null;
   site_name?: string | null;
   plot_name?: string | null;
+  site?: { name: string } | null;
+  plot?: { plot_name: string } | null;
   status?: string | null;
   created_at: string;
 }
 
-const TABLE_CONFIG: { table: string; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean }[] = [
-  { table: 'sign_offs',         formType: 'Sign Off',         select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true },
-  { table: 'hourly_agreements', formType: 'Hourly Agreement',  select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true },
-  { table: 'invoices',          formType: 'Invoice',           select: 'id, user_id, status, created_at',                                hasStatus: true,  hasSite: false },
-  { table: 'issue_reports',     formType: 'Issue Report',      select: 'id, user_id, site_id, site_name, plot_name, status, created_at', hasStatus: true,  hasSite: true },
-  { table: 'quality_reports',   formType: 'Quality Report',    select: 'id, user_id, site_id, site_name, plot_name, status, created_at', hasStatus: true,  hasSite: true },
+const TABLE_CONFIG: { table: string; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean; userIdField: string }[] = [
+  { table: 'sign_offs',                  formType: 'Sign Off',         select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
+  { table: 'hourly_agreements',          formType: 'Hourly Agreement', select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
+  { table: 'invoices',                   formType: 'Invoice',          select: 'id, user_id, status, created_at',                                hasStatus: true,  hasSite: false, userIdField: 'user_id' },
+  { table: 'issue_report_submissions',   formType: 'Issue Report',     select: 'id, submitted_by, site_id, site:sites(name), plot:plots(plot_name), created_at', hasStatus: false, hasSite: true,  userIdField: 'submitted_by' },
+  { table: 'quality_report_submissions', formType: 'Quality Report',   select: 'id, submitted_by, site_id, site_name, plot_name, created_at',   hasStatus: false, hasSite: true,  userIdField: 'submitted_by' },
 ];
 
 async function fetchFeed(filters: {
@@ -285,7 +288,8 @@ async function fetchFeed(filters: {
     if (result.status !== 'fulfilled') continue;
     for (const row of result.value.rows) {
       rawItems.push({ cfg: result.value.cfg, row });
-      if (row.user_id) userIds.add(row.user_id);
+      const uid = row[result.value.cfg.userIdField as keyof RawRow] as string | undefined;
+      if (uid) userIds.add(uid);
     }
   }
 
@@ -301,17 +305,22 @@ async function fetchFeed(filters: {
     }
   }
 
-  const items: FeedItem[] = rawItems.map(({ cfg, row }) => ({
-    id: row.id,
-    form_type: cfg.formType,
-    submitted_by: nameMap.get(row.user_id) || 'Unknown',
-    site_id: row.site_id || null,
-    site_name: row.site_name || null,
-    plot_name: row.plot_name || null,
-    created_at: row.created_at,
-    status: cfg.hasStatus ? (row.status || null) : null,
-    source_table: cfg.table,
-  }));
+  const items: FeedItem[] = rawItems.map(({ cfg, row }) => {
+    const uid = row[cfg.userIdField as keyof RawRow] as string | undefined;
+    const siteName = row.site_name || (row.site as any)?.name || null;
+    const plotName = row.plot_name || (row.plot as any)?.plot_name || null;
+    return {
+      id: row.id,
+      form_type: cfg.formType,
+      submitted_by: uid ? (nameMap.get(uid) || 'Unknown') : 'Unknown',
+      site_id: row.site_id || null,
+      site_name: siteName,
+      plot_name: plotName,
+      created_at: row.created_at,
+      status: cfg.hasStatus ? (row.status || null) : null,
+      source_table: cfg.table,
+    };
+  });
 
   items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   return items;
@@ -395,7 +404,7 @@ export default function ActivityFeed() {
 
   // Realtime subscriptions
   useEffect(() => {
-    const tables = ['sign_offs', 'hourly_agreements', 'invoices', 'issue_reports', 'quality_reports'];
+    const tables = ['sign_offs', 'hourly_agreements', 'invoices', 'issue_report_submissions', 'quality_report_submissions'];
     const channel = supabase.channel('activity-feed');
 
     for (const table of tables) {
