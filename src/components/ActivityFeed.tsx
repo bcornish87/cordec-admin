@@ -86,98 +86,90 @@ function statusBadge(status: string | null) {
 /*  Data fetching                                                      */
 /* ------------------------------------------------------------------ */
 
+interface RawRow {
+  id: string;
+  user_id: string;
+  site_name?: string | null;
+  plot_name?: string | null;
+  status?: string | null;
+  created_at: string;
+}
+
+const TABLE_CONFIG: { table: string; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean }[] = [
+  { table: 'sign_offs',         formType: 'Sign Off',         select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true },
+  { table: 'hourly_agreements', formType: 'Hourly Agreement',  select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true },
+  { table: 'invoices',          formType: 'Invoice',           select: 'id, user_id, status, created_at',                                hasStatus: true,  hasSite: false },
+  { table: 'issue_reports',     formType: 'Issue Report',      select: 'id, user_id, site_id, site_name, plot_name, status, created_at', hasStatus: true,  hasSite: true },
+  { table: 'quality_reports',   formType: 'Quality Report',    select: 'id, user_id, site_id, site_name, plot_name, status, created_at', hasStatus: true,  hasSite: true },
+];
+
 async function fetchFeed(filters: {
   formType: string;
   siteId: string;
-  developerId: string;
 }): Promise<FeedItem[]> {
-  const limit = 50;
-  const items: FeedItem[] = [];
+  // Pick which tables to query
+  const tables = filters.formType === 'all'
+    ? TABLE_CONFIG
+    : TABLE_CONFIG.filter(t => t.formType === filters.formType);
 
-  // Build queries for each source table
-  const queries: { table: string; formType: FormType; select: string; hasStatus: boolean }[] = [
-    {
-      table: 'sign_offs',
-      formType: 'Sign Off',
-      select: 'id, site_name, plot_name, created_at, user_id, profiles!sign_offs_user_id_fkey(first_name, last_name)',
-      hasStatus: false,
-    },
-    {
-      table: 'hourly_agreements',
-      formType: 'Hourly Agreement',
-      select: 'id, site_name, plot_name, created_at, user_id, profiles!hourly_agreements_user_id_fkey(first_name, last_name)',
-      hasStatus: false,
-    },
-    {
-      table: 'invoices',
-      formType: 'Invoice',
-      select: 'id, status, created_at, user_id, profiles!invoices_user_id_fkey(first_name, last_name)',
-      hasStatus: true,
-    },
-    {
-      table: 'issue_reports',
-      formType: 'Issue Report',
-      select: 'id, site_name, plot_name, status, created_at, user_id, profiles!issue_reports_user_id_fkey(first_name, last_name)',
-      hasStatus: true,
-    },
-    {
-      table: 'quality_reports',
-      formType: 'Quality Report',
-      select: 'id, site_name, plot_name, status, created_at, user_id, profiles!quality_reports_user_id_fkey(first_name, last_name)',
-      hasStatus: true,
-    },
-  ];
-
-  // Filter to specific form type if set
-  const filtered = filters.formType === 'all'
-    ? queries
-    : queries.filter(q => q.formType === filters.formType);
-
+  // Query each table in parallel — allSettled so missing tables don't break the feed
   const results = await Promise.allSettled(
-    filtered.map(async (q) => {
+    tables.map(async (cfg) => {
       let query = supabase
-        .from(q.table)
-        .select(q.select)
-        .order('created_at', { ascending: false })
-        .limit(limit);
+        .from(cfg.table)
+        .select(cfg.select)
+        .order('created_at', { ascending: false });
 
-      // Site filter — sign_offs/hourly_agreements/issue_reports/quality_reports have site_name
-      // invoices may not have site_name, skip filter for those
-      if (filters.siteId !== 'all' && q.table !== 'invoices') {
+      if (filters.siteId !== 'all' && cfg.hasSite) {
         query = query.eq('site_id', filters.siteId);
       }
 
       const { data, error } = await query;
-      if (error) throw new Error(`${q.table}: ${error.message}`);
-      return (data || []).map((row: any) => {
-        const profile = row.profiles;
-        const firstName = profile?.first_name || '';
-        const lastName = profile?.last_name || '';
-        const name = [firstName, lastName].filter(Boolean).join(' ') || 'Unknown';
-        return {
-          id: row.id,
-          form_type: q.formType,
-          submitted_by: name,
-          site_name: row.site_name || null,
-          plot_name: row.plot_name || null,
-          created_at: row.created_at,
-          status: q.hasStatus ? (row.status || null) : null,
-          source_table: q.table,
-        } as FeedItem;
-      });
+      if (error) throw new Error(`${cfg.table}: ${error.message}`);
+      return { cfg, rows: (data || []) as RawRow[] };
     }),
   );
 
+  // Collect raw rows + gather unique user_ids
+  const rawItems: { cfg: typeof TABLE_CONFIG[number]; row: RawRow }[] = [];
+  const userIds = new Set<string>();
+
   for (const result of results) {
-    if (result.status === 'fulfilled') {
-      items.push(...result.value);
+    if (result.status !== 'fulfilled') continue;
+    for (const row of result.value.rows) {
+      rawItems.push({ cfg: result.value.cfg, row });
+      if (row.user_id) userIds.add(row.user_id);
     }
-    // Silently skip failed tables (e.g. if issue_reports/quality_reports don't exist yet)
   }
 
-  // Sort all items by created_at descending, take top 50
+  // Batch-resolve user names from profiles
+  const nameMap = new Map<string, string>();
+  if (userIds.size > 0) {
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('user_id, first_name, last_name')
+      .in('user_id', [...userIds]);
+    for (const p of (profiles || []) as { user_id: string; first_name: string | null; last_name: string | null }[]) {
+      const name = [p.first_name, p.last_name].filter(Boolean).join(' ');
+      nameMap.set(p.user_id, name || 'Unknown');
+    }
+  }
+
+  // Build feed items
+  const items: FeedItem[] = rawItems.map(({ cfg, row }) => ({
+    id: row.id,
+    form_type: cfg.formType,
+    submitted_by: nameMap.get(row.user_id) || 'Unknown',
+    site_name: row.site_name || null,
+    plot_name: row.plot_name || null,
+    created_at: row.created_at,
+    status: cfg.hasStatus ? (row.status || null) : null,
+    source_table: cfg.table,
+  }));
+
+  // Sort newest first
   items.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-  return items.slice(0, limit);
+  return items;
 }
 
 /* ------------------------------------------------------------------ */
@@ -225,14 +217,13 @@ export default function ActivityFeed() {
       const data = await fetchFeed({
         formType: formTypeFilter,
         siteId: siteFilter,
-        developerId: developerFilter,
       });
       setItems(data);
     } catch {
       toast.error('Failed to load activity feed');
     }
     setLoading(false);
-  }, [formTypeFilter, siteFilter, developerFilter]);
+  }, [formTypeFilter, siteFilter]);
 
   // Initial load + reload on filter change
   useEffect(() => {
