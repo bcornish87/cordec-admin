@@ -1,17 +1,7 @@
-import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { useEffect, useState, useRef, Component, lazy, Suspense } from 'react';
+import type { ReactNode } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Loader2 } from 'lucide-react';
-
-// Fix default marker icons (Leaflet + bundlers issue)
-delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-  iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-  shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-});
 
 interface SiteLocation {
   id: string;
@@ -31,7 +21,6 @@ function loadCache(): Record<string, { lat: number; lng: number; ts: number }> {
     if (!raw) return {};
     const parsed = JSON.parse(raw);
     const now = Date.now();
-    // Evict expired entries
     for (const key of Object.keys(parsed)) {
       if (now - parsed[key].ts > CACHE_TTL) delete parsed[key];
     }
@@ -69,9 +58,78 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Default centre: UK
 const UK_CENTER: [number, number] = [53.5, -2.5];
 const DEFAULT_ZOOM = 6;
+
+// Lazy-load the actual map to avoid Leaflet SSR / initialization issues
+const LazyMap = lazy(() =>
+  import('react-leaflet').then((mod) =>
+    import('leaflet').then((L) => {
+      // Import Leaflet CSS
+      import('leaflet/dist/leaflet.css');
+      // Fix default marker icons (Leaflet + bundlers issue)
+      delete (L.Icon.Default.prototype as unknown as Record<string, unknown>)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
+        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
+      });
+
+      // Build the map component inline using the resolved modules
+      const MapInner = ({ sites }: { sites: SiteLocation[] }) => (
+        <mod.MapContainer
+          center={UK_CENTER}
+          zoom={DEFAULT_ZOOM}
+          style={{ height: '100%', width: '100%' }}
+          scrollWheelZoom={true}
+        >
+          <mod.TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          />
+          {sites.map((site) => (
+            <mod.Marker key={site.id} position={[site.lat, site.lng]}>
+              <mod.Popup>
+                <div className="text-sm">
+                  <p className="font-semibold">{site.name}</p>
+                  {site.developer_name && (
+                    <p className="text-gray-600">{site.developer_name}</p>
+                  )}
+                  {site.address && (
+                    <p className="text-gray-500 text-xs mt-1">{site.address}</p>
+                  )}
+                </div>
+              </mod.Popup>
+            </mod.Marker>
+          ))}
+        </mod.MapContainer>
+      );
+
+      return { default: MapInner };
+    })
+  )
+);
+
+// Simple error boundary to prevent map errors from breaking the dashboard
+class MapErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  state = { hasError: false };
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="h-[400px] flex items-center justify-center text-muted-foreground text-sm">
+          Map failed to load
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function SiteMap() {
   const [sites, setSites] = useState<SiteLocation[]>([]);
@@ -83,14 +141,13 @@ export default function SiteMap() {
     abortRef.current = false;
 
     (async () => {
-      // Fetch active sites with addresses
       const { data, error } = await supabase
         .from('sites')
         .select('id, name, address, developer:developers(name)')
-        .eq('is_archived', false)
-        .not('address', 'is', null);
+        .eq('is_archived', false);
 
       if (error || !data) {
+        console.error('SiteMap: failed to fetch sites', error);
         setLoading(false);
         return;
       }
@@ -98,12 +155,11 @@ export default function SiteMap() {
       const cache = loadCache();
       const results: SiteLocation[] = [];
       let geocoded = 0;
+      const withAddress = data.filter((s) => (s.address ?? '').trim().length > 0);
 
-      for (const site of data) {
+      for (const site of withAddress) {
         if (abortRef.current) break;
         const addr = (site.address ?? '').trim();
-        if (!addr) continue;
-
         const cacheKey = addr.toLowerCase();
 
         if (cache[cacheKey]) {
@@ -120,7 +176,7 @@ export default function SiteMap() {
 
         // Geocode with rate-limit respect (1 req/sec for Nominatim)
         if (geocoded > 0) await sleep(1100);
-        setProgress(`Geocoding ${results.length + 1} of ${data.length}…`);
+        setProgress(`Geocoding ${results.length + 1} of ${withAddress.length}…`);
         const coords = await geocode(addr);
         geocoded++;
 
@@ -166,32 +222,18 @@ export default function SiteMap() {
         )}
       </div>
       <div className="h-[400px] w-full">
-        <MapContainer
-          center={UK_CENTER}
-          zoom={DEFAULT_ZOOM}
-          className="h-full w-full z-0"
-          scrollWheelZoom={true}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {sites.map((site) => (
-            <Marker key={site.id} position={[site.lat, site.lng]}>
-              <Popup>
-                <div className="text-sm">
-                  <p className="font-semibold">{site.name}</p>
-                  {site.developer_name && (
-                    <p className="text-gray-600">{site.developer_name}</p>
-                  )}
-                  {site.address && (
-                    <p className="text-gray-500 text-xs mt-1">{site.address}</p>
-                  )}
-                </div>
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
+        <MapErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                Loading map…
+              </div>
+            }
+          >
+            <LazyMap sites={sites} />
+          </Suspense>
+        </MapErrorBoundary>
       </div>
     </div>
   );
