@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ActivityFeed from '@/components/ActivityFeed';
+import SiteMap from '@/components/SiteMap';
 
 interface Stats {
   active_developers: number;
@@ -167,7 +168,10 @@ export default function Dashboard() {
         />
       </div>
 
-      {/* Row 4: Top developers */}
+      {/* Row 4: Site map */}
+      <SiteMap />
+
+      {/* Row 5: Top developers */}
       {stats.top_developers.length > 0 && (
         <div className="border rounded-lg bg-card">
           <div className="px-5 py-3 border-b border-border/60">
@@ -194,7 +198,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* Row 5: Activity feed */}
+      {/* Row 6: Activity feed */}
       <ActivityFeed />
     </div>
   );
