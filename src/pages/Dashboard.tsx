@@ -5,6 +5,7 @@ import {
   Contact, PoundSterling, Warehouse, ClipboardList,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import ActivityFeed from '@/components/ActivityFeed';
 
 interface Stats {
   active_developers: number;
@@ -192,6 +193,9 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Row 5: Activity feed */}
+      <ActivityFeed />
     </div>
   );
 }
