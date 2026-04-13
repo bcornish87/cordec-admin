@@ -2,9 +2,11 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertTriangle, Clock, CheckSquare, ClipboardCheck, FileText,
-  Filter, RefreshCw,
+  Filter, RefreshCw, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
@@ -186,6 +188,8 @@ export default function ActivityFeed() {
   const [sites, setSites] = useState<Site[]>([]);
   const [developers, setDevelopers] = useState<Developer[]>([]);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<FeedItem | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // Load filter options
   useEffect(() => {
@@ -261,9 +265,24 @@ export default function ActivityFeed() {
   }, [loadFeed]);
 
   const handleRowClick = (item: FeedItem) => {
-    // Navigate to the relevant section — for now go to Users page
-    // In future this can deep-link to the specific submission record
     navigate('/users');
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    const { error } = await supabase
+      .from(confirmDelete.source_table)
+      .delete()
+      .eq('id', confirmDelete.id);
+    setDeleting(false);
+    if (error) {
+      toast.error('Failed to delete: ' + error.message);
+      return;
+    }
+    toast.success(`${confirmDelete.form_type} deleted`);
+    setConfirmDelete(null);
+    setItems(prev => prev.filter(i => !(i.source_table === confirmDelete.source_table && i.id === confirmDelete.id)));
   };
 
   return (
@@ -365,14 +384,46 @@ export default function ActivityFeed() {
                 </p>
               </div>
 
-              {/* Timestamp */}
+              {/* Timestamp + delete */}
               <div className="shrink-0 text-xs text-muted-foreground">
                 {timeAgo(item.created_at)}
               </div>
+              <button
+                className="shrink-0 p-1 rounded text-muted-foreground hover:text-red-400 hover:bg-red-400/10 transition-colors"
+                title="Delete submission"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmDelete(item);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
             </div>
           );
         })}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={!!confirmDelete} onOpenChange={open => { if (!open) setConfirmDelete(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Submission</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Permanently delete this <span className="font-medium text-foreground">{confirmDelete?.form_type}</span> from{' '}
+            <span className="font-medium text-foreground">{confirmDelete?.submitted_by}</span>
+            {confirmDelete?.site_name && <> at <span className="font-medium text-foreground">{confirmDelete.site_name}</span></>}
+            ? This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={deleting}>Cancel</Button>
+            <Button variant="destructive" disabled={deleting} onClick={handleDelete}>
+              <Trash2 className="mr-2 h-4 w-4" />
+              {deleting ? 'Deleting...' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
