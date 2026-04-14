@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/lib/supabase';
+import { requestPasswordReset } from '@/api/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,9 +16,7 @@ function ForgotPassword({ onBack }: { onBack: () => void }) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
+    const { error } = await requestPasswordReset(email, `${window.location.origin}/reset-password`);
     if (error) setError(error.message);
     else setSent(true);
     setLoading(false);

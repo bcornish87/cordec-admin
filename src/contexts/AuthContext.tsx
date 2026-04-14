@@ -1,6 +1,12 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/lib/supabase';
+import {
+  getSession,
+  onAuthStateChange,
+  signInWithPassword,
+  getProfileActive,
+  signOut as apiSignOut,
+} from '@/api/auth';
 
 interface AuthContextType {
   session: Session | null;
@@ -17,32 +23,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const unsubscribe = onAuthStateChange((session) => {
       setSession(session);
       setLoading(false);
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    getSession().then((session) => {
       setSession(session);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return unsubscribe;
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await signInWithPassword(email, password);
     if (error) return { error: error as Error | null };
 
     // Check if the user's profile is active
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_active')
-      .eq('user_id', data.user.id)
-      .single();
+    const profile = await getProfileActive(data.user.id);
 
     if (profile && !profile.is_active) {
-      await supabase.auth.signOut();
+      await apiSignOut();
       return { error: new Error('Your account has been deactivated. Please contact your administrator.') };
     }
 
@@ -50,7 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    await apiSignOut();
   };
 
   return (
