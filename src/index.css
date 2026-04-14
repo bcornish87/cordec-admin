@@ -15,10 +15,10 @@
        #E32A2A brand red      – primary actions, alerts, accents
     */
 
-    --background: 200 7% 10%;          /* #191B1C */
+    --background: 200 7% 10%;          /* #191B1C — site background */
     --foreground: 204 9% 78%;          /* #C2C9CC */
 
-    --card: 204 4% 23%;                /* #383B3D */
+    --card: 204 4% 23%;                /* #383B3D — popups & table backgrounds */
     --card-foreground: 204 9% 78%;     /* #C2C9CC */
 
     --popover: 204 4% 23%;             /* #383B3D */
@@ -136,12 +136,26 @@
     color: hsl(204 6% 94%);   /* #EDEFF0 — row data is the dominant element */
   }
 
-  table tbody tr:nth-child(even) {
-    background-color: hsl(200 7% 10%);   /* #191B1C alternating row */
-  }
-
   table tbody tr:hover {
     background-color: hsl(200 5% 37%);   /* #595F61 hover */
+  }
+
+  table tbody td {
+    height: 2.25rem;   /* 36px — uniform row height across every table */
+    border-right: 1px solid hsl(var(--border));
+    border-bottom: 1px solid hsl(var(--border));
+  }
+  table tbody td:last-child {
+    border-right: none;
+  }
+  table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  table thead th {
+    border-right: 1px solid hsl(var(--border));
+  }
+  table thead th:last-child {
+    border-right: none;
   }
 
   /* Progress: red fill, muted track, rounded ends */

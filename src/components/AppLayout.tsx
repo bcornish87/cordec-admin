@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { LayoutDashboard, Building2, Settings, LogOut, Users as UsersIcon } from 'lucide-react';
+import { LayoutDashboard, Building2, Settings, LogOut, Users as UsersIcon, Headphones } from 'lucide-react';
 import cordecLogo from '@/assets/cordec-logo.png';
 import { NavLink } from '@/components/NavLink';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard, end: true },
   { title: 'Developers', url: '/developers', icon: Building2 },
   { title: 'Users', url: '/users', icon: UsersIcon },
+  { title: 'Customer Care', url: '/customer-care', icon: Headphones },
   { title: 'Settings', url: '/settings', icon: Settings },
 ];
 

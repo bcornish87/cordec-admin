@@ -348,7 +348,7 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
                 </TableHeader>
                 <TableBody>
                   {archived.map(c => (
-                    <TableRow key={c.id} className="[&:nth-child(even)]:bg-transparent">
+                    <TableRow key={c.id}>
                       <TableCell className="py-2 text-muted-foreground">
                         {c.first_name} {c.last_name}
                       </TableCell>
@@ -407,7 +407,7 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
               {sortedContacts.map(c => (
                 <TableRow
                   key={c.id}
-                  className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                  className="cursor-pointer hover:bg-muted/50"
                   onClick={() => openEdit(c)}
                 >
                   <TableCell className="py-2 font-medium">

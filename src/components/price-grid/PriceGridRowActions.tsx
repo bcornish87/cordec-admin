@@ -24,7 +24,7 @@ export function PriceGridRowActions({
   onArchive,
 }: PriceGridRowActionsProps) {
   return (
-    <td className="px-1 py-1 border-b border-r border-[#383B3D] align-middle">
+    <td className="px-1 py-1 border-b border-r border-border align-middle">
       <div className="flex items-center justify-start gap-1 pl-1">
         <Checkbox
           checked={selected}

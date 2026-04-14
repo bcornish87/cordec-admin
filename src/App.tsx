@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Developers from "./pages/Clients";
 import Settings from "./pages/Settings";
 import Users from "./pages/Users";
+import CustomerCare from "./pages/CustomerCare";
 import ResetPassword from "./pages/ResetPassword";
 
 function ProtectedRoutes() {
@@ -25,6 +26,7 @@ function ProtectedRoutes() {
         <Route path="/developers" element={<Developers />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/customer-care" element={<CustomerCare />} />
       </Routes>
     </AppLayout>
     </PendingUsersProvider>

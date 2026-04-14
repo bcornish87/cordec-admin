@@ -185,7 +185,7 @@ export function DevelopersList({
                 </TableHeader>
                 <TableBody>
                   {archived.map(dev => (
-                    <TableRow key={dev.id} className="[&:nth-child(even)]:bg-transparent">
+                    <TableRow key={dev.id}>
                       <TableCell className="py-2 text-center text-muted-foreground">{dev.name}</TableCell>
                       <TableCell className="py-2 text-center">
                         <Button variant="outline" size="sm" onClick={() => setArchived(dev.id, false)}>
@@ -220,7 +220,7 @@ export function DevelopersList({
               {active.map(dev => (
                 <TableRow
                   key={dev.id}
-                  className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                  className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onOpen({ id: dev.id, name: dev.name })}
                 >
                   <TableCell className="py-2 text-center font-medium">{dev.name}</TableCell>

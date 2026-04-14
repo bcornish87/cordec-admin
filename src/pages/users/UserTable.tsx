@@ -80,7 +80,7 @@ export function UserTable({ label, users, onSelect, onUpdate, onDelete, onToggle
             {sorted.map(u => (
               <TableRow
                 key={u.id}
-                className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                className="cursor-pointer hover:bg-muted/50"
                 onClick={() => onSelect(u)}
               >
                 <TableCell className="py-2 text-center font-medium">{fullName(u)}</TableCell>

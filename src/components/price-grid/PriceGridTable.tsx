@@ -100,7 +100,7 @@ export function PriceGridTable({
         <div className="h-px flex-1 bg-border" />
       </div>
       <div
-        className="border rounded-lg shadow-sm overflow-hidden"
+        className="border border-border rounded-md bg-card overflow-hidden"
         onPaste={onTablePaste}
       >
         <table className="text-sm border-collapse w-full table-fixed">
@@ -173,7 +173,7 @@ export function PriceGridTable({
           </thead>
           <tbody>
             {plots.map((plot, plotIdx) => (
-              <tr key={plot.id} className="even:bg-[#191B1C] hover:bg-[#595F61]/60">
+              <tr key={plot.id}>
                 <PriceGridRowActions
                   plot={plot}
                   plotIdx={plotIdx}
@@ -184,7 +184,7 @@ export function PriceGridTable({
                   onMoveDown={() => onMovePlot(plot, 1)}
                   onArchive={() => onArchivePlot(plot)}
                 />
-                <td className="border-b border-r border-[#383B3D] p-0 font-semibold align-middle text-[#EDEFF0]">
+                <td className="border-b border-r border-border p-0 font-semibold align-middle text-[#EDEFF0]">
                   <input
                     type="text"
                     value={plot.plot_name}
@@ -211,7 +211,7 @@ export function PriceGridTable({
                   return (
                     <td
                       key={tpl.id}
-                      className="border-b border-l border-[#383B3D] p-0 align-middle"
+                      className="border-b border-l border-border p-0 align-middle"
                     >
                       <input
                         type="text"
@@ -235,7 +235,7 @@ export function PriceGridTable({
                   return (
                     <td
                       key={`custom:${col.name}`}
-                      className="border-b border-l border-[#383B3D] p-0 align-middle"
+                      className="border-b border-l border-border p-0 align-middle"
                     >
                       <input
                         type="text"

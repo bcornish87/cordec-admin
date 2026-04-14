@@ -260,7 +260,7 @@ export function SitesList({
                 </TableHeader>
                 <TableBody>
                   {archived.map(site => (
-                    <TableRow key={site.id} className="[&:nth-child(even)]:bg-transparent">
+                    <TableRow key={site.id}>
                       <TableCell className="py-2 text-center text-muted-foreground">{site.name}</TableCell>
                       <TableCell className="py-2 text-center">
                         <Button variant="outline" size="sm" onClick={() => setArchived(site.id, false)}>
@@ -299,7 +299,7 @@ export function SitesList({
                 return (
                 <TableRow
                   key={site.id}
-                  className="cursor-pointer hover:bg-muted/50 [&:nth-child(even)]:bg-transparent"
+                  className="cursor-pointer hover:bg-muted/50"
                   onClick={() => onOpen({ id: site.id, name: site.name })}
                 >
                   <TableCell className="py-2 text-center font-medium">{site.name}</TableCell>
