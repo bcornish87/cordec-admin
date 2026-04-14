@@ -18,7 +18,17 @@ import {
   Plus, Archive as ArchiveIcon, ArrowUpDown, Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import {
+  fetchContactsByDeveloperWithAssignments,
+  insertContact,
+  updateContact,
+  setContactArchived,
+  deleteContact,
+  updateContactNotification,
+  insertSiteContacts,
+  deleteSiteContactsForContact,
+} from '@/api/clients';
+import { fetchActiveSitesByDeveloper } from '@/api/sites';
 
 const ROLES = [
   'Contract Manager',
@@ -108,18 +118,16 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
 
   const fetchContacts = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('id, first_name, last_name, email, phone, default_role, is_archived, notify_issue_report, notify_hourly_agreement, notify_sign_off, notify_quality_report, site_contacts(role, site_id, site:sites(name))')
-      .eq('developer_id', developerId)
-      .order('last_name');
-    if (error) {
-      toast.error('Failed to load contacts: ' + error.message);
+    let data: any[];
+    try {
+      data = await fetchContactsByDeveloperWithAssignments(developerId);
+    } catch (err) {
+      toast.error('Failed to load contacts: ' + (err as Error).message);
       setLoading(false);
       return;
     }
     setContacts(
-      (data || []).map((c: any) => ({
+      data.map((c: any) => ({
         id: c.id,
         first_name: c.first_name,
         last_name: c.last_name,
@@ -142,13 +150,11 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
   };
 
   const fetchSites = async () => {
-    const { data } = await supabase
-      .from('sites')
-      .select('id, name')
-      .eq('developer_id', developerId)
-      .eq('is_archived', false)
-      .order('name');
-    setSites(data || []);
+    try {
+      setSites(await fetchActiveSitesByDeveloper(developerId));
+    } catch {
+      // Match prior behaviour: silently ignore failure (caller didn't toast).
+    }
   };
 
   useEffect(() => {
@@ -192,12 +198,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
     };
 
     if (editing) {
-      const { error } = await supabase
-        .from('contacts')
-        .update(payload)
-        .eq('id', editing.id);
-      if (error) {
-        toast.error('Update failed: ' + error.message);
+      try {
+        await updateContact(editing.id, payload);
+      } catch (err) {
+        toast.error('Update failed: ' + (err as Error).message);
         setSaving(false);
         return;
       }
@@ -207,14 +211,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
       const toRemove = currentSiteIds.filter(id => !selectedSiteIds.includes(id));
       const role = payload.default_role || editing.default_role;
       if (toRemove.length > 0) {
-        await supabase
-          .from('site_contacts')
-          .delete()
-          .eq('contact_id', editing.id)
-          .in('site_id', toRemove);
+        await deleteSiteContactsForContact(editing.id, toRemove);
       }
       if (toAdd.length > 0 && role) {
-        await supabase.from('site_contacts').insert(
+        await insertSiteContacts(
           toAdd.map(siteId => ({
             site_id: siteId,
             contact_id: editing.id,
@@ -229,12 +229,11 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
         setSaving(false);
         return;
       }
-      const { data: newContact, error } = await supabase.from('contacts').insert({
-        ...payload,
-        developer_id: developerId,
-      }).select('id').single();
-      if (error) {
-        toast.error('Create failed: ' + error.message);
+      let newContact: { id: string };
+      try {
+        newContact = await insertContact({ ...payload, developer_id: developerId });
+      } catch (err) {
+        toast.error('Create failed: ' + (err as Error).message);
         setSaving(false);
         return;
       }
@@ -244,9 +243,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
           contact_id: newContact.id,
           role: payload.default_role!,
         }));
-        const { error: assignError } = await supabase.from('site_contacts').insert(rows);
-        if (assignError) {
-          toast.error('Contact created but site assignment failed: ' + assignError.message);
+        try {
+          await insertSiteContacts(rows);
+        } catch (err) {
+          toast.error('Contact created but site assignment failed: ' + (err as Error).message);
           setSaving(false);
           setDialogOpen(false);
           await fetchContacts();
@@ -261,12 +261,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
   };
 
   const setArchived = async (id: string, value: boolean) => {
-    const { error } = await supabase
-      .from('contacts')
-      .update({ is_archived: value })
-      .eq('id', id);
-    if (error) {
-      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + error.message);
+    try {
+      await setContactArchived(id, value);
+    } catch (err) {
+      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + (err as Error).message);
       return;
     }
     const updated = contacts.map(c => (c.id === id ? { ...c, is_archived: value } : c));
@@ -278,9 +276,10 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
   };
 
   const handleDelete = async (id: string) => {
-    const { error } = await supabase.from('contacts').delete().eq('id', id);
-    if (error) {
-      toast.error('Delete failed: ' + error.message);
+    try {
+      await deleteContact(id);
+    } catch (err) {
+      toast.error('Delete failed: ' + (err as Error).message);
       return;
     }
     const updated = contacts.filter(c => c.id !== id);
@@ -292,11 +291,9 @@ export function DeveloperContacts({ developerId }: { developerId: string }) {
   };
 
   const toggleNotification = async (contactId: string, field: typeof NOTIFICATION_FIELDS[number]['key'], value: boolean) => {
-    const { error } = await supabase
-      .from('contacts')
-      .update({ [field]: value })
-      .eq('id', contactId);
-    if (error) {
+    try {
+      await updateContactNotification(contactId, field, value);
+    } catch {
       toast.error('Failed to update notification preference');
       return;
     }

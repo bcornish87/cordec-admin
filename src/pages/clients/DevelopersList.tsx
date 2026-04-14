@@ -7,9 +7,16 @@ import {
 } from '@/components/ui/table';
 import { Plus, X, Pencil, Archive as ArchiveIcon, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { SUPABASE_URL, developerFields, type DeveloperRow } from './types';
+import { developerFields, type DeveloperRow } from './types';
+import {
+  fetchDevelopers,
+  fetchDeveloperStats,
+  insertDeveloper,
+  updateDeveloper,
+  setDeveloperArchived,
+  uploadDeveloperLogo,
+} from '@/api/clients';
 
 /**
  * Level 1 list. Custom layout: each row is just the developer name with Edit and
@@ -31,20 +38,20 @@ export function DevelopersList({
 
   const fetchAll = async () => {
     setLoading(true);
-    const [devsRes, statsRes] = await Promise.all([
-      supabase.from('developers').select('*').order('name', { ascending: true }),
-      supabase.rpc('get_developer_stats'),
-    ]);
-    if (devsRes.error) {
-      toast.error('Load failed: ' + devsRes.error.message);
+    let devs: any[];
+    let stats: any[];
+    try {
+      [devs, stats] = await Promise.all([fetchDevelopers(), fetchDeveloperStats()]);
+    } catch (err) {
+      toast.error('Load failed: ' + (err as Error).message);
       setLoading(false);
       return;
     }
     const statsMap = new Map<string, { site_count: number; unit_count: number }>();
-    for (const s of (statsRes.data || []) as any[]) {
+    for (const s of stats) {
       statsMap.set(s.developer_id, { site_count: Number(s.site_count), unit_count: Number(s.unit_count) });
     }
-    setDevelopers((devsRes.data || []).map((d: any) => ({
+    setDevelopers(devs.map((d: any) => ({
       ...d,
       site_count: statsMap.get(d.id)?.site_count ?? 0,
       unit_count: statsMap.get(d.id)?.unit_count ?? 0,
@@ -79,35 +86,32 @@ export function DevelopersList({
   const handleSave = async () => {
     setSaving(true);
     if (editing) {
-      const { error } = await supabase
-        .from('developers')
-        .update(formData)
-        .eq('id', editing.id);
-      if (error) toast.error('Update failed: ' + error.message);
-      else {
+      try {
+        await updateDeveloper(editing.id, formData);
         toast.success('Saved');
         setDialogOpen(false);
         await fetchAll();
+      } catch (err) {
+        toast.error('Update failed: ' + (err as Error).message);
       }
     } else {
-      const { error } = await supabase.from('developers').insert(formData);
-      if (error) toast.error('Create failed: ' + error.message);
-      else {
+      try {
+        await insertDeveloper(formData);
         toast.success('Created');
         setDialogOpen(false);
         await fetchAll();
+      } catch (err) {
+        toast.error('Create failed: ' + (err as Error).message);
       }
     }
     setSaving(false);
   };
 
   const setArchived = async (id: string, value: boolean) => {
-    const { error } = await supabase
-      .from('developers')
-      .update({ is_archived: value })
-      .eq('id', id);
-    if (error) {
-      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + error.message);
+    try {
+      await setDeveloperArchived(id, value);
+    } catch (err) {
+      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + (err as Error).message);
       return;
     }
     setDevelopers(prev =>
@@ -117,16 +121,13 @@ export function DevelopersList({
   };
 
   const handleLogoUpload = async (file: File) => {
-    const ext = file.name.split('.').pop();
-    const path = `developers/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage
-      .from('logos')
-      .upload(path, file, { upsert: true });
-    if (error) {
-      toast.error('Upload failed: ' + error.message);
+    let url: string;
+    try {
+      url = await uploadDeveloperLogo(file);
+    } catch (err) {
+      toast.error('Upload failed: ' + (err as Error).message);
       return;
     }
-    const url = `${SUPABASE_URL}/storage/v1/object/public/logos/${path}`;
     setFormData(p => ({ ...p, logo_url: url }));
     toast.success('Logo uploaded');
   };

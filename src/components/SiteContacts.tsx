@@ -6,7 +6,13 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Phone, Mail, Plus, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
+import {
+  fetchSiteContactsForSite,
+  fetchAssignableContactsByDeveloper,
+  insertSiteContacts,
+  deleteSiteContact,
+  deleteSiteContactsByIds,
+} from '@/api/clients';
 
 const ROLE_ORDER: Record<string, number> = {
   'Contract Manager': 0,
@@ -46,17 +52,16 @@ export function SiteContacts({
   const [saving, setSaving] = useState(false);
 
   const fetchSiteContacts = async () => {
-    const { data, error } = await supabase
-      .from('site_contacts')
-      .select('id, role, contact_id, contact:contacts(id, first_name, last_name, email, phone, is_archived)')
-      .eq('site_id', siteId);
-    if (error) {
-      toast.error('Failed to load site contacts: ' + error.message);
+    let data: any[];
+    try {
+      data = await fetchSiteContactsForSite(siteId);
+    } catch (err) {
+      toast.error('Failed to load site contacts: ' + (err as Error).message);
       setLoading(false);
       return;
     }
     setSiteContacts(
-      (data || [])
+      data
         .filter((row: any) => !row.contact?.is_archived)
         .map((row: any) => ({
           id: row.id,
@@ -81,17 +86,14 @@ export function SiteContacts({
   });
 
   const openAssign = async () => {
-    const { data, error } = await supabase
-      .from('contacts')
-      .select('id, first_name, last_name, email, phone, default_role')
-      .eq('developer_id', developerId)
-      .eq('is_archived', false)
-      .order('first_name');
-    if (error) {
-      toast.error('Failed to load contacts: ' + error.message);
+    let data: any[];
+    try {
+      data = await fetchAssignableContactsByDeveloper(developerId);
+    } catch (err) {
+      toast.error('Failed to load contacts: ' + (err as Error).message);
       return;
     }
-    setPool(data || []);
+    setPool(data);
     // Pre-tick currently assigned contacts
     setSelectedIds(new Set(siteContacts.map(sc => sc.contact_id)));
     setAssignOpen(true);
@@ -105,12 +107,10 @@ export function SiteContacts({
 
     // Remove unselected
     if (toRemove.length > 0) {
-      const { error } = await supabase
-        .from('site_contacts')
-        .delete()
-        .in('id', toRemove.map(sc => sc.id));
-      if (error) {
-        toast.error('Failed to remove contacts: ' + error.message);
+      try {
+        await deleteSiteContactsByIds(toRemove.map(sc => sc.id));
+      } catch (err) {
+        toast.error('Failed to remove contacts: ' + (err as Error).message);
         setSaving(false);
         return;
       }
@@ -126,9 +126,10 @@ export function SiteContacts({
           role: c?.default_role || 'Site Manager',
         };
       });
-      const { error } = await supabase.from('site_contacts').insert(rows);
-      if (error) {
-        toast.error('Failed to assign contacts: ' + error.message);
+      try {
+        await insertSiteContacts(rows);
+      } catch (err) {
+        toast.error('Failed to assign contacts: ' + (err as Error).message);
         setSaving(false);
         return;
       }
@@ -143,12 +144,10 @@ export function SiteContacts({
   };
 
   const handleRemove = async (scId: string) => {
-    const { error } = await supabase
-      .from('site_contacts')
-      .delete()
-      .eq('id', scId);
-    if (error) {
-      toast.error('Remove failed: ' + error.message);
+    try {
+      await deleteSiteContact(scId);
+    } catch (err) {
+      toast.error('Remove failed: ' + (err as Error).message);
       return;
     }
     setSiteContacts(prev => prev.filter(sc => sc.id !== scId));

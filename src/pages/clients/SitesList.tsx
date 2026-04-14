@@ -8,7 +8,6 @@ import {
 import { ChevronDown, Plus, X, Pencil, Archive as ArchiveIcon, Upload } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -17,7 +16,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SUPABASE_URL, siteFields, type SiteRow } from './types';
+import { siteFields, type SiteRow } from './types';
+import {
+  fetchSitesByDeveloperWithPlotCount,
+  insertSite,
+  updateSite,
+  uploadSitePlanForNewSite,
+} from '@/api/sites';
+import { insertPlot } from '@/api/plots';
+import {
+  fetchSlimContactsByDeveloper,
+  fetchSiteContactIds,
+  insertSiteContacts,
+  deleteSiteContactsForSite,
+} from '@/api/clients';
 
 /**
  * Level 2 list. Sites for one developer. Each row is just the site name with Edit
@@ -41,28 +53,25 @@ export function SitesList({
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
 
   const fetchDevContacts = async () => {
-    const { data } = await supabase
-      .from('contacts')
-      .select('id, first_name, last_name, default_role')
-      .eq('developer_id', developerId)
-      .eq('is_archived', false)
-      .order('first_name');
-    setDevContacts(data || []);
+    try {
+      const data = await fetchSlimContactsByDeveloper(developerId);
+      setDevContacts(data);
+    } catch {
+      // Match prior behaviour: silently ignore failure (caller didn't toast).
+    }
   };
 
   const fetchAll = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('sites')
-      .select('*, plots(id)')
-      .eq('developer_id', developerId)
-      .order('name', { ascending: true });
-    if (error) {
-      toast.error('Load failed: ' + error.message);
+    let data: any[];
+    try {
+      data = await fetchSitesByDeveloperWithPlotCount(developerId);
+    } catch (err) {
+      toast.error('Load failed: ' + (err as Error).message);
       setLoading(false);
       return;
     }
-    setSites((data || []).map((s: any) => ({ ...s, plot_count: s.plots?.length ?? 0 })) as SiteRow[]);
+    setSites(data.map((s: any) => ({ ...s, plot_count: s.plots?.length ?? 0 })) as SiteRow[]);
     setLoading(false);
   };
 
@@ -101,11 +110,11 @@ export function SitesList({
     });
     setFormData(fd);
     // Load current site contacts
-    const { data: sc } = await supabase
-      .from('site_contacts')
-      .select('contact_id')
-      .eq('site_id', site.id);
-    setSelectedContactIds((sc || []).map((r: any) => r.contact_id));
+    try {
+      setSelectedContactIds(await fetchSiteContactIds(site.id));
+    } catch {
+      setSelectedContactIds([]);
+    }
     setDialogOpen(true);
   };
 
@@ -113,40 +122,33 @@ export function SitesList({
     setSaving(true);
     const payload: Record<string, unknown> = { ...formData };
     if (editing) {
-      const { error } = await supabase
-        .from('sites')
-        .update(payload)
-        .eq('id', editing.id);
-      if (error) { toast.error('Update failed: ' + error.message); }
-      else {
+      try {
+        await updateSite(editing.id, payload as Record<string, string | number | null>);
         // Sync contacts: get current, diff, add/remove
-        const { data: currentSc } = await supabase
-          .from('site_contacts')
-          .select('contact_id')
-          .eq('site_id', editing.id);
-        const currentIds = (currentSc || []).map((r: any) => r.contact_id);
+        const currentIds = await fetchSiteContactIds(editing.id);
         const toRemove = currentIds.filter((id: string) => !selectedContactIds.includes(id));
         const toAdd = selectedContactIds.filter(id => !currentIds.includes(id));
         if (toRemove.length > 0) {
-          await supabase.from('site_contacts').delete().eq('site_id', editing.id).in('contact_id', toRemove);
+          await deleteSiteContactsForSite(editing.id, toRemove);
         }
         if (toAdd.length > 0) {
           const rows = toAdd.map(contactId => {
             const c = devContacts.find(dc => dc.id === contactId);
             return { site_id: editing.id, contact_id: contactId, role: c?.default_role || 'Site Manager' };
           });
-          await supabase.from('site_contacts').insert(rows);
+          await insertSiteContacts(rows);
         }
         toast.success('Saved');
         setDialogOpen(false);
         await fetchAll();
+      } catch (err) {
+        toast.error('Update failed: ' + (err as Error).message);
       }
     } else {
       payload.developer_id = developerId;
-      const { data: newSite, error } = await supabase.from('sites').insert(payload).select('id').single();
-      if (error) toast.error('Create failed: ' + error.message);
-      else {
-        await supabase.from('plots').insert({
+      try {
+        const newSite = await insertSite(payload);
+        await insertPlot({
           site_id: newSite.id,
           plot_name: '1',
           status: 'not_started',
@@ -158,23 +160,23 @@ export function SitesList({
             const c = devContacts.find(dc => dc.id === contactId);
             return { site_id: newSite.id, contact_id: contactId, role: c?.default_role || 'Site Manager' };
           });
-          await supabase.from('site_contacts').insert(rows);
+          await insertSiteContacts(rows);
         }
         toast.success('Created');
         setDialogOpen(false);
         await fetchAll();
+      } catch (err) {
+        toast.error('Create failed: ' + (err as Error).message);
       }
     }
     setSaving(false);
   };
 
   const setArchived = async (id: string, value: boolean) => {
-    const { error } = await supabase
-      .from('sites')
-      .update({ is_archived: value })
-      .eq('id', id);
-    if (error) {
-      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + error.message);
+    try {
+      await updateSite(id, { is_archived: value });
+    } catch (err) {
+      toast.error((value ? 'Archive' : 'Restore') + ' failed: ' + (err as Error).message);
       return;
     }
     setSites(prev =>
@@ -184,12 +186,10 @@ export function SitesList({
   };
 
   const updateSiteStatus = async (id: string, status: string) => {
-    const { error } = await supabase
-      .from('sites')
-      .update({ status })
-      .eq('id', id);
-    if (error) {
-      toast.error('Status update failed: ' + error.message);
+    try {
+      await updateSite(id, { status });
+    } catch (err) {
+      toast.error('Status update failed: ' + (err as Error).message);
       return;
     }
     setSites(prev =>
@@ -198,16 +198,13 @@ export function SitesList({
   };
 
   const handleSitePlanUpload = async (file: File) => {
-    const ext = file.name.split('.').pop();
-    const path = `sites/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await supabase.storage
-      .from('site-plans')
-      .upload(path, file, { upsert: true });
-    if (error) {
-      toast.error('Upload failed: ' + error.message);
+    let url: string;
+    try {
+      url = await uploadSitePlanForNewSite(file);
+    } catch (err) {
+      toast.error('Upload failed: ' + (err as Error).message);
       return;
     }
-    const url = `${SUPABASE_URL}/storage/v1/object/public/site-plans/${path}`;
     setFormData(p => ({ ...p, site_plans: url }));
     toast.success('Site plan uploaded');
   };
