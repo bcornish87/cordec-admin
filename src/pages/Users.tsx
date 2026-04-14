@@ -16,139 +16,31 @@ import { ArrowLeft, ArrowUpDown, ArrowUp, ArrowDown, Save, ChevronDown, UserX, P
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { usePendingUsers } from '@/contexts/PendingUsersContext';
-
-/* ------------------------------------------------------------------ */
-/*  Types                                                              */
-/* ------------------------------------------------------------------ */
-
-interface UserRow {
-  id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  post_code: string | null;
-  sort_code: string | null;
-  account_number: string | null;
-  national_insurance_number: string | null;
-  utr_number: string | null;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  role: string | null;
-  rate: number | null;
-  role_id: string | null;
-  notify_issue_report: boolean;
-  notify_hourly_agreement: boolean;
-  notify_sign_off: boolean;
-  notify_quality_report: boolean;
-  notify_invoice: boolean;
-}
-
-const STAFF_NOTIFICATION_FIELDS = [
-  { key: 'notify_issue_report', label: 'Issue Reports' },
-  { key: 'notify_hourly_agreement', label: 'Hourly Agreements' },
-  { key: 'notify_sign_off', label: 'Sign Offs' },
-  { key: 'notify_quality_report', label: 'Quality Reports' },
-  { key: 'notify_invoice', label: 'Invoices' },
-] as const;
-
-interface SignOff {
-  id: string;
-  site_name: string | null;
-  plot_name: string | null;
-  task_type: string;
-  manager_name: string | null;
-  created_at: string;
-}
-
-interface HourlyAgreement {
-  id: string;
-  site_name: string | null;
-  plot_name: string | null;
-  hours: number;
-  rate: number | null;
-  descriptions: string[];
-  created_at: string;
-}
-
-interface Invoice {
-  id: string;
-  status: string;
-  total_amount: number;
-  submitted_at: string | null;
-  created_at: string;
-}
-
-type SortKey = 'name' | 'role' | 'rate';
-type SortDir = 'asc' | 'desc';
-
-const ROLES = ['admin', 'supervisor', 'decorator'] as const;
-
-/* ------------------------------------------------------------------ */
-/*  Helpers                                                            */
-/* ------------------------------------------------------------------ */
-
-function formatCurrency(value: number | null) {
-  if (value == null) return '—';
-  return `£${Number(value).toFixed(2)}`;
-}
-
-function capitalize(s: string | null) {
-  if (!s) return '';
-  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
-function formatPhone(phone: string) {
-  const digits = phone.replace(/\s+/g, '');
-  if (digits.length > 5) return digits.slice(0, 5) + ' ' + digits.slice(5);
-  return digits;
-}
-
-function formatPostCode(pc: string) {
-  const clean = pc.replace(/\s+/g, '').toUpperCase();
-  if (clean.length > 3) return clean.slice(0, -3) + ' ' + clean.slice(-3);
-  return clean;
-}
-
-function fullName(row: UserRow) {
-  const parts = [row.first_name, row.last_name].filter(Boolean).map(s => capitalize(s));
-  return parts.join(' ') || '(no name)';
-}
-
-function formatDate(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric',
-  });
-}
-
-function formatDateTime(iso: string | null) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleDateString('en-GB', {
-    day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-}
+import {
+  STAFF_NOTIFICATION_FIELDS,
+  ROLES,
+  type UserRow,
+  type SignOff,
+  type HourlyAgreement,
+  type Invoice,
+  type SortKey,
+  type SortDir,
+  type DetailForm,
+  type PendingUser,
+} from '@/pages/users/types';
+import {
+  formatCurrency,
+  capitalize,
+  formatPhone,
+  formatPostCode,
+  fullName,
+  formatDate,
+  formatDateTime,
+} from '@/pages/users/utils';
 
 /* ------------------------------------------------------------------ */
 /*  Detail view (editable)                                             */
 /* ------------------------------------------------------------------ */
-
-interface DetailForm {
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  post_code: string;
-  sort_code: string;
-  account_number: string;
-  national_insurance_number: string;
-  utr_number: string;
-  is_active: boolean;
-  role: string;
-  rate: string;
-}
 
 function UserDetail({ user, onBack, onSaved }: {
   user: UserRow;
@@ -468,20 +360,6 @@ function UserDetail({ user, onBack, onSaved }: {
 /* ------------------------------------------------------------------ */
 /*  Pending approvals                                                  */
 /* ------------------------------------------------------------------ */
-
-interface PendingUser {
-  id: string;
-  user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  sort_code: string | null;
-  account_number: string | null;
-  national_insurance_number: string | null;
-  utr_number: string | null;
-  created_at: string;
-}
 
 function PendingSection({ users, onAction, onDelete }: {
   users: PendingUser[];
