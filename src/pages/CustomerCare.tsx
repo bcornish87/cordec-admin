@@ -344,9 +344,11 @@ function DaysOpenCell({ received, status }: { received: string | null; status: J
   const days = Math.floor((Date.now() - new Date(received).getTime()) / 86400000);
   const tone = closed
     ? ''
-    : days > 14
+    : days > 21
       ? 'text-destructive font-medium'
-      : 'text-orange-400 font-medium';
+      : days > 14
+        ? 'text-orange-400 font-medium'
+        : '';
   return <span className={tone}>{days}</span>;
 }
 
