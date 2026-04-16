@@ -45,14 +45,23 @@ export async function fetchSiteDetail(siteId: string): Promise<SiteDetail> {
 
 /**
  * Patch a site row by id. Accepts any column → value mapping; caller is
- * responsible for sanitising values (trimming, parseFloat, etc.).
+ * responsible for sanitising values (trimming, parseFloat, etc.). Requests
+ * the row back so a silent RLS block (update succeeds with 0 rows) surfaces
+ * as an explicit error instead of a no-op.
  */
 export async function updateSite(
   siteId: string,
   patch: Record<string, string | number | boolean | null>,
 ): Promise<void> {
-  const { error } = await supabase.from('sites').update(patch).eq('id', siteId);
+  const { data, error } = await supabase
+    .from('sites')
+    .update(patch)
+    .eq('id', siteId)
+    .select('id');
   if (error) throw error;
+  if (!data || data.length === 0) {
+    throw new Error('Update blocked (RLS or missing row)');
+  }
 }
 
 /**
