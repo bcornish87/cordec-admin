@@ -15,9 +15,10 @@ import { fetchSiteDetail, updateSite, uploadSitePlan } from '@/api/sites';
 /**
  * Top-of-page editable site info panel for the admin layout. Loads the site row,
  * lets the supervisor edit name / address / grid reference inline (save on blur)
- * and manage one or more site-plan files. Existing single-URL data is parsed as
- * a one-element list, and the column is round-tripped as newline-separated URLs
- * so we don't need a schema change to support multiple files.
+ * and manage one or more site-plan files. Grid Reference is the master source
+ * of coordinates — latitude/longitude are parsed from it and displayed read-only.
+ * Site plans are round-tripped as newline-separated URLs so we don't need a
+ * schema change to support multiple files.
  */
 export function SiteInfoPanel({
   siteId,
@@ -81,25 +82,29 @@ export function SiteInfoPanel({
   };
 
   const handleAddressBlur = () => saveField('address', address.trim());
-  const handleGridRefBlur = () => saveField('grid_reference', gridRef.trim());
 
-  const handleLatBlur = async () => {
-    const val = latitude.trim();
-    const num = val === '' ? null : parseFloat(val);
-    if (val !== '' && (num === null || isNaN(num))) return;
-    try {
-      await updateSite(siteId, { latitude: num });
-    } catch (err) {
-      toast.error('Save failed: ' + (err as Error).message);
-    }
+  const parseGridRef = (raw: string): { lat: number | null; lng: number | null } => {
+    const trimmed = raw.trim();
+    if (!trimmed) return { lat: null, lng: null };
+    const match = trimmed.match(/^\s*(-?\d+(?:\.\d+)?)\s*[, ]\s*(-?\d+(?:\.\d+)?)\s*$/);
+    if (!match) return { lat: null, lng: null };
+    const lat = parseFloat(match[1]);
+    const lng = parseFloat(match[2]);
+    if (isNaN(lat) || isNaN(lng)) return { lat: null, lng: null };
+    return { lat, lng };
   };
 
-  const handleLngBlur = async () => {
-    const val = longitude.trim();
-    const num = val === '' ? null : parseFloat(val);
-    if (val !== '' && (num === null || isNaN(num))) return;
+  const handleGridRefBlur = async () => {
+    const trimmed = gridRef.trim();
+    const { lat, lng } = parseGridRef(trimmed);
+    setLatitude(lat != null ? String(lat) : '');
+    setLongitude(lng != null ? String(lng) : '');
     try {
-      await updateSite(siteId, { longitude: num });
+      await updateSite(siteId, {
+        grid_reference: trimmed,
+        latitude: lat,
+        longitude: lng,
+      });
     } catch (err) {
       toast.error('Save failed: ' + (err as Error).message);
     }
@@ -181,26 +186,16 @@ export function SiteInfoPanel({
           />
         </div>
         <div className="px-4 py-3 space-y-1">
-          <Label htmlFor="site-lat" className="text-xs text-muted-foreground">Latitude</Label>
-          <Input
-            id="site-lat"
-            value={latitude}
-            onChange={e => setLatitude(e.target.value)}
-            onBlur={handleLatBlur}
-            placeholder="e.g. 50.2631"
-            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
-          />
+          <Label className="text-xs text-muted-foreground">Latitude</Label>
+          <div className="h-8 px-2 text-sm flex items-center text-muted-foreground">
+            {latitude || '—'}
+          </div>
         </div>
         <div className="px-4 py-3 space-y-1">
-          <Label htmlFor="site-lng" className="text-xs text-muted-foreground">Longitude</Label>
-          <Input
-            id="site-lng"
-            value={longitude}
-            onChange={e => setLongitude(e.target.value)}
-            onBlur={handleLngBlur}
-            placeholder="e.g. -5.0512"
-            className="h-8 px-2 text-sm border-0 bg-transparent p-0 focus-visible:ring-0"
-          />
+          <Label className="text-xs text-muted-foreground">Longitude</Label>
+          <div className="h-8 px-2 text-sm flex items-center text-muted-foreground">
+            {longitude || '—'}
+          </div>
         </div>
         <div className="px-4 py-3 space-y-1">
           <Label className="text-xs text-muted-foreground">Site Plans</Label>
