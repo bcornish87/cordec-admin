@@ -4,6 +4,7 @@ import { useSupabaseQuery } from '@/hooks/useSupabaseQuery';
 import {
   Building2, MapPin, Home, Users, HardHat, Paintbrush,
   Contact, PoundSterling, Warehouse, ClipboardList,
+  Package, Receipt,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import ActivityFeed from '@/components/ActivityFeed';
@@ -71,6 +72,10 @@ export default function Dashboard() {
   const formatCurrency = (v: number) =>
     new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP', maximumFractionDigits: 0 }).format(v);
 
+  const labourValue = Number(stats.total_value);
+  const materialsValue = labourValue / 9;
+  const totalWithMarkup = (labourValue + materialsValue) * 1.3;
+
   return (
     <div className="space-y-6">
       <div>
@@ -79,7 +84,7 @@ export default function Dashboard() {
       </div>
 
       {/* Row 1: Core counts */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           icon={Building2}
           label="Developers"
@@ -99,16 +104,33 @@ export default function Dashboard() {
           value={Number(stats.total_units).toLocaleString()}
           colour="text-orange-500"
         />
+      </div>
+
+      {/* Row 2: Value breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard
           icon={PoundSterling}
-          label="Total Value"
-          value={formatCurrency(Number(stats.total_value))}
+          label="Labour Value"
+          value={formatCurrency(labourValue)}
           sub={`${Number(stats.priced_tasks).toLocaleString()} priced / ${Number(stats.unpriced_tasks).toLocaleString()} unpriced`}
           colour="text-emerald-500"
         />
+        <StatCard
+          icon={Package}
+          label="Materials"
+          value={formatCurrency(materialsValue)}
+          sub="10% of total turnover"
+          colour="text-cyan-500"
+        />
+        <StatCard
+          icon={Receipt}
+          label="Labour + Materials (30% markup)"
+          value={formatCurrency(totalWithMarkup)}
+          colour="text-indigo-500"
+        />
       </div>
 
-      {/* Row 2: People */}
+      {/* Row 3: People */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
           icon={Paintbrush}
