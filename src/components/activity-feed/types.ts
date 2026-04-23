@@ -1,5 +1,12 @@
 export type FormType = 'Issue Report' | 'Hourly Agreement' | 'Sign Off' | 'Quality Report' | 'Invoice';
 
+export type ActivitySourceTable =
+  | 'sign_offs'
+  | 'hourly_agreements'
+  | 'invoices'
+  | 'issue_report_submissions'
+  | 'quality_report_submissions';
+
 export interface FeedItem {
   id: string;
   form_type: FormType;
@@ -9,7 +16,7 @@ export interface FeedItem {
   plot_name: string | null;
   created_at: string;
   status: string | null;
-  source_table: string;
+  source_table: ActivitySourceTable;
 }
 
 export interface Site {

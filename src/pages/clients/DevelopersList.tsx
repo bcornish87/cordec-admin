@@ -17,6 +17,7 @@ import {
   setDeveloperArchived,
   uploadDeveloperLogo,
 } from '@/api/clients';
+import type { TablesInsert } from '@/integrations/supabase/types';
 
 /**
  * Level 1 list. Custom layout: each row is just the developer name with Edit and
@@ -96,7 +97,7 @@ export function DevelopersList({
       }
     } else {
       try {
-        await insertDeveloper(formData);
+        await insertDeveloper(formData as unknown as TablesInsert<'developers'>);
         toast.success('Created');
         setDialogOpen(false);
         await fetchAll();

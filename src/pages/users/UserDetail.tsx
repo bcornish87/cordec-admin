@@ -33,6 +33,7 @@ import {
   updateProfile,
   updateUserRole,
   insertUserRole,
+  type AppRole,
 } from '@/api/users';
 
 export function UserDetail({ user, onBack, onSaved }: {
@@ -97,7 +98,7 @@ export function UserDetail({ user, onBack, onSaved }: {
     };
 
     const roleUpdate = {
-      role: form.role,
+      role: form.role as AppRole,
       rate: parseFloat(form.rate) || 18,
     };
 

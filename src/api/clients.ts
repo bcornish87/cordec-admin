@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { SUPABASE_URL } from '@/pages/clients/types';
 
 /* ------------------------------------------------------------------ */
@@ -26,14 +27,14 @@ export async function fetchDeveloperStats(): Promise<DeveloperStats[]> {
   return (data ?? []) as DeveloperStats[];
 }
 
-export async function insertDeveloper(payload: Record<string, unknown>): Promise<void> {
+export async function insertDeveloper(payload: TablesInsert<'developers'>): Promise<void> {
   const { error } = await supabase.from('developers').insert(payload);
   if (error) throw error;
 }
 
 export async function updateDeveloper(
   id: string,
-  payload: Record<string, unknown>,
+  payload: TablesUpdate<'developers'>,
 ): Promise<void> {
   const { error } = await supabase.from('developers').update(payload).eq('id', id);
   if (error) throw error;
@@ -118,7 +119,7 @@ export async function fetchContactsByDeveloperWithAssignments(
  * Insert a contact row and return its id (caller pre-merges developer_id).
  */
 export async function insertContact(
-  payload: Record<string, unknown>,
+  payload: TablesInsert<'contacts'>,
 ): Promise<{ id: string }> {
   const { data, error } = await supabase
     .from('contacts')
@@ -131,7 +132,7 @@ export async function insertContact(
 
 export async function updateContact(
   id: string,
-  payload: Record<string, unknown>,
+  payload: TablesUpdate<'contacts'>,
 ): Promise<void> {
   const { error } = await supabase.from('contacts').update(payload).eq('id', id);
   if (error) throw error;
@@ -150,17 +151,23 @@ export async function deleteContact(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export type ContactNotificationField =
+  | 'notify_issue_report'
+  | 'notify_hourly_agreement'
+  | 'notify_sign_off'
+  | 'notify_quality_report';
+
 /**
  * Toggle a single notification flag (notify_issue_report, etc) on a contact.
  */
 export async function updateContactNotification(
   id: string,
-  field: string,
+  field: ContactNotificationField,
   value: boolean,
 ): Promise<void> {
   const { error } = await supabase
     .from('contacts')
-    .update({ [field]: value })
+    .update({ [field]: value } as TablesUpdate<'contacts'>)
     .eq('id', id);
   if (error) throw error;
 }

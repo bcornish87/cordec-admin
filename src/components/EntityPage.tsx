@@ -1,5 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase, SUPABASE_URL } from '@/lib/supabase';
+import type { Database } from '@/integrations/supabase/types';
+
+type TableName = keyof Database['public']['Tables'];
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -18,7 +21,7 @@ export interface FieldConfig {
   options?: { value: string; label: string }[];
   required?: boolean;
   /** For select fields that reference another table */
-  foreignTable?: string;
+  foreignTable?: TableName;
   foreignLabel?: string;
   /** Width class for the column header */
   width?: string;
@@ -30,7 +33,7 @@ export interface FieldConfig {
 
 interface EntityPageProps {
   title: string;
-  table: string;
+  table: TableName;
   fields: FieldConfig[];
   defaultValues?: Record<string, any>;
   /** Scope rows to a parent FK (e.g. sites under a developer). The FK column is hidden from table/form. */
@@ -112,8 +115,8 @@ export function EntityPage({
   const fetchData = async () => {
     setLoading(true);
     let q = supabase.from(table).select('*');
-    if (orderBy) q = q.order(orderBy, { ascending: false });
-    if (parentFilter) q = q.eq(parentFilter.column, parentFilter.value);
+    if (orderBy) q = q.order(orderBy as never, { ascending: false });
+    if (parentFilter) q = q.eq(parentFilter.column as never, parentFilter.value);
     const { data, error } = await q;
     if (error) toast.error('Failed to load: ' + error.message);
     else setData(data || []);
@@ -159,11 +162,11 @@ export function EntityPage({
   const handleSave = async () => {
     setSaving(true);
     if (editingRecord) {
-      const { error } = await supabase.from(table).update(formData).eq(rowKey, editingRecord[rowKey]);
+      const { error } = await supabase.from(table).update(formData as never).eq(rowKey as never, editingRecord[rowKey]);
       if (error) toast.error('Update failed: ' + error.message);
       else { toast.success('Updated'); setDialogOpen(false); fetchData(); }
     } else {
-      const { error } = await supabase.from(table).insert(formData);
+      const { error } = await supabase.from(table).insert(formData as never);
       if (error) toast.error('Create failed: ' + error.message);
       else { toast.success('Created'); setDialogOpen(false); fetchData(); }
     }
@@ -172,7 +175,7 @@ export function EntityPage({
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    const { error } = await supabase.from(table).delete().eq(rowKey, deleteId);
+    const { error } = await supabase.from(table).delete().eq(rowKey as never, deleteId);
     if (error) toast.error('Delete failed: ' + error.message);
     else { toast.success('Deleted'); fetchData(); }
     setDeleteId(null);

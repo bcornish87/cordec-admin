@@ -89,7 +89,7 @@ function makeUser(overrides: Partial<UserRow>): UserRow {
     email: null, phone: null, post_code: null,
     sort_code: null, account_number: null,
     national_insurance_number: null, utr_number: null,
-    is_active: true, created_at: '', updated_at: '',
+    is_active: true, created_at: '', updated_at: '', last_seen_at: null,
     role: null, rate: null, role_id: null,
     notify_issue_report: false, notify_hourly_agreement: false,
     notify_sign_off: false, notify_quality_report: false, notify_invoice: false,

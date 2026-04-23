@@ -23,6 +23,7 @@ import {
   updateSite,
   uploadSitePlanForNewSite,
 } from '@/api/sites';
+import type { TablesInsert } from '@/integrations/supabase/types';
 import { insertPlot } from '@/api/plots';
 import {
   fetchSlimContactsByDeveloper,
@@ -147,7 +148,7 @@ export function SitesList({
     } else {
       payload.developer_id = developerId;
       try {
-        const newSite = await insertSite(payload);
+        const newSite = await insertSite(payload as unknown as TablesInsert<'sites'>);
         await insertPlot({
           site_id: newSite.id,
           plot_name: '1',

@@ -1,5 +1,8 @@
 import { supabase } from '@/lib/supabase';
+import type { Enums, TablesUpdate } from '@/integrations/supabase/types';
 import type { HourlyAgreement, Invoice, PendingUser, SignOff } from '@/pages/users/types';
+
+export type AppRole = Enums<'app_role'>;
 
 /* ------------------------------------------------------------------ */
 /*  Profiles + roles (Users page list)                                 */
@@ -51,7 +54,7 @@ export async function toggleUserActive(userId: string, isActive: boolean): Promi
  */
 export async function updateUserRole(
   roleId: string,
-  patch: { role?: string; rate?: number },
+  patch: { role?: AppRole; rate?: number },
 ): Promise<void> {
   const { error } = await supabase.from('user_roles').update(patch).eq('id', roleId);
   if (error) throw error;
@@ -62,7 +65,7 @@ export async function updateUserRole(
  */
 export async function insertUserRole(payload: {
   user_id: string;
-  role: string;
+  role: AppRole;
   rate: number;
 }): Promise<void> {
   const { error } = await supabase.from('user_roles').insert(payload);
@@ -75,7 +78,7 @@ export async function insertUserRole(payload: {
  */
 export async function updateProfile(
   profileId: string,
-  patch: Record<string, unknown>,
+  patch: TablesUpdate<'profiles'>,
 ): Promise<void> {
   const { error } = await supabase.from('profiles').update(patch).eq('id', profileId);
   if (error) throw error;

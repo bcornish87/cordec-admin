@@ -1,6 +1,13 @@
 import { supabase } from '@/lib/supabase';
 import type { Developer, FeedItem, FormType, Site } from '@/components/activity-feed/types';
 
+export type ActivityTable =
+  | 'sign_offs'
+  | 'hourly_agreements'
+  | 'invoices'
+  | 'issue_report_submissions'
+  | 'quality_report_submissions';
+
 interface RawRow {
   id: string;
   user_id?: string;
@@ -14,7 +21,7 @@ interface RawRow {
   created_at: string;
 }
 
-const TABLE_CONFIG: { table: string; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean; userIdField: string }[] = [
+const TABLE_CONFIG: { table: ActivityTable; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean; userIdField: string }[] = [
   { table: 'sign_offs',                  formType: 'Sign Off',         select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
   { table: 'hourly_agreements',          formType: 'Hourly Agreement', select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
   { table: 'invoices',                   formType: 'Invoice',          select: 'id, user_id, status, created_at',                                hasStatus: true,  hasSite: false, userIdField: 'user_id' },
@@ -40,12 +47,12 @@ export async function fetchFeed(filters: {
         .order('created_at', { ascending: false });
 
       if (filters.siteId !== 'all' && cfg.hasSite) {
-        query = query.eq('site_id', filters.siteId);
+        query = query.eq('site_id' as never, filters.siteId);
       }
 
       const { data, error } = await query;
       if (error) throw new Error(`${cfg.table}: ${error.message}`);
-      return { cfg, rows: (data || []) as RawRow[] };
+      return { cfg, rows: (data || []) as unknown as RawRow[] };
     }),
   );
 
@@ -94,7 +101,7 @@ export async function fetchFeed(filters: {
   return items;
 }
 
-export async function fetchDetail(sourceTable: string, id: string): Promise<any> {
+export async function fetchDetail(sourceTable: ActivityTable, id: string): Promise<any> {
   if (sourceTable === 'issue_report_submissions') {
     const { data, error } = await supabase
       .from(sourceTable)
@@ -148,7 +155,7 @@ export async function fetchActivityFilterOptions(): Promise<ActivityFilterOption
  * Delete an activity-feed row by source table + id. Throws the raw Supabase
  * error so callers can inspect `.code` (e.g. '23503' = invoice FK violation).
  */
-export async function deleteActivityItem(sourceTable: string, id: string): Promise<void> {
+export async function deleteActivityItem(sourceTable: ActivityTable, id: string): Promise<void> {
   const { error } = await supabase.from(sourceTable).delete().eq('id', id);
   if (error) throw error;
 }

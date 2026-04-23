@@ -29,6 +29,7 @@ import {
   updateProfile,
   createUser,
   updatePendingUserStatus,
+  type AppRole,
   hardDeleteUser,
 } from '@/api/users';
 import { PendingSection } from '@/pages/users/PendingSection';
@@ -119,9 +120,9 @@ export default function Users() {
 
       try {
         if (user.role_id) {
-          await updateUserRole(user.role_id, { role: patch.role });
+          await updateUserRole(user.role_id, { role: patch.role as AppRole });
         } else {
-          await insertUserRole({ user_id: user.user_id, role: patch.role, rate: user.rate ?? 18 });
+          await insertUserRole({ user_id: user.user_id, role: patch.role as AppRole, rate: user.rate ?? 18 });
         }
       } catch {
         toast.error('Failed to update role');

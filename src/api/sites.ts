@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import type { TablesInsert, TablesUpdate } from '@/integrations/supabase/types';
 import { SUPABASE_URL } from '@/pages/clients/types';
 
 export interface SiteLocation {
@@ -51,7 +52,7 @@ export async function fetchSiteDetail(siteId: string): Promise<SiteDetail> {
  */
 export async function updateSite(
   siteId: string,
-  patch: Record<string, string | number | boolean | null>,
+  patch: TablesUpdate<'sites'>,
 ): Promise<void> {
   const { data, error } = await supabase
     .from('sites')
@@ -92,7 +93,7 @@ export async function uploadSitePlanForNewSite(file: File): Promise<string> {
  * Insert a new site row and return its id. Caller passes the full payload
  * (developer_id, name, address, etc).
  */
-export async function insertSite(payload: Record<string, unknown>): Promise<{ id: string }> {
+export async function insertSite(payload: TablesInsert<'sites'>): Promise<{ id: string }> {
   const { data, error } = await supabase.from('sites').insert(payload).select('id').single();
   if (error) throw error;
   return data as { id: string };

@@ -58,7 +58,7 @@ function StatCard({
 
 export default function Dashboard() {
   const { data: stats, loading, error } = useSupabaseQuery<Stats>(
-    () => supabase.rpc('get_dashboard_stats'),
+    () => supabase.rpc('get_dashboard_stats').then(r => ({ data: r.data as unknown as Stats | null, error: r.error })),
     [],
   );
 
