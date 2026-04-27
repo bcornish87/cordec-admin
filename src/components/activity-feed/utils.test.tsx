@@ -118,7 +118,7 @@ describe('DetailField', () => {
 
 describe('FORM_TYPE_CONFIG', () => {
   it('has an entry for every FormType', () => {
-    for (const t of ['Issue Report', 'Hourly Agreement', 'Sign Off', 'Quality Report', 'Invoice'] as const) {
+    for (const t of ['Issue Report', 'Hourly Instruction', 'Sign Off', 'Quality Report', 'Invoice'] as const) {
       expect(FORM_TYPE_CONFIG[t]).toBeDefined();
       expect(FORM_TYPE_CONFIG[t].icon).toBeTruthy();
       expect(FORM_TYPE_CONFIG[t].colour).toMatch(/^text-/);

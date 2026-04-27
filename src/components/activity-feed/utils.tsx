@@ -30,7 +30,7 @@ export function formatCurrency(value: number | null) {
 
 export const FORM_TYPE_CONFIG: Record<FormType, { icon: React.ElementType; colour: string }> = {
   'Issue Report':      { icon: AlertTriangle,  colour: 'text-red-400' },
-  'Hourly Agreement':  { icon: Clock,          colour: 'text-amber-400' },
+  'Hourly Instruction':{ icon: Clock,          colour: 'text-amber-400' },
   'Sign Off':          { icon: CheckSquare,    colour: 'text-green-400' },
   'Quality Report':    { icon: ClipboardCheck, colour: 'text-blue-400' },
   'Invoice':           { icon: FileText,       colour: 'text-purple-400' },

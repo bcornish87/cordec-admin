@@ -194,7 +194,7 @@ export function renderInvoiceDetail(record: any, submittedBy: string) {
 
       {hourlyItems.length > 0 && (
         <div>
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Hourly Agreements</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Hourly Instructions</h4>
           <div className="border rounded text-sm divide-y divide-border">
             {hourlyItems.map((item: any, i: number) => {
               const ha = item.hourly_agreement;

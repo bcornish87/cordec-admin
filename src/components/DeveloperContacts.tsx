@@ -65,7 +65,7 @@ interface ContactRow {
 
 const NOTIFICATION_FIELDS = [
   { key: 'notify_issue_report', label: 'Issue Reports' },
-  { key: 'notify_hourly_agreement', label: 'Hourly Agreements' },
+  { key: 'notify_hourly_agreement', label: 'Hourly Instructions' },
   { key: 'notify_sign_off', label: 'Sign Offs' },
   { key: 'notify_quality_report', label: 'Quality Reports' },
 ] as const;

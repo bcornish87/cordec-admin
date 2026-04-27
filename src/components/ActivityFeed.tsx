@@ -168,7 +168,7 @@ export default function ActivityFeed() {
     switch (selectedItem.form_type) {
       case 'Sign Off':
         return renderSignOffDetail(detailRecord, selectedItem.submitted_by);
-      case 'Hourly Agreement':
+      case 'Hourly Instruction':
         return renderHourlyAgreementDetail(detailRecord, selectedItem.submitted_by);
       case 'Invoice':
         return renderInvoiceDetail(detailRecord, selectedItem.submitted_by);
@@ -203,7 +203,7 @@ export default function ActivityFeed() {
             <SelectContent>
               <SelectItem value="all">All types</SelectItem>
               <SelectItem value="Issue Report">Issue Reports</SelectItem>
-              <SelectItem value="Hourly Agreement">Hourly Agreements</SelectItem>
+              <SelectItem value="Hourly Instruction">Hourly Instructions</SelectItem>
               <SelectItem value="Sign Off">Sign Offs</SelectItem>
               <SelectItem value="Quality Report">Quality Reports</SelectItem>
               <SelectItem value="Invoice">Invoices</SelectItem>

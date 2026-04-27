@@ -71,7 +71,7 @@ export function UserDetail({ user, onBack, onSaved }: {
         fetchUserInvoices(user.user_id),
       ]);
       if (soRes.status === 'rejected') toast.error('Failed to load sign-offs');
-      if (haRes.status === 'rejected') toast.error('Failed to load hourly agreements');
+      if (haRes.status === 'rejected') toast.error('Failed to load hourly instructions');
       if (invRes.status === 'rejected') toast.error('Failed to load invoices');
       setSignOffs(soRes.status === 'fulfilled' ? soRes.value : []);
       setHourlyAgreements(haRes.status === 'fulfilled' ? haRes.value : []);
@@ -283,8 +283,8 @@ export function UserDetail({ user, onBack, onSaved }: {
           </div>
 
           <div className="border rounded-lg p-4 bg-card space-y-3">
-            {section(`Hourly Agreements (${hourlyAgreements.length})`, hourlyAgreements.length === 0 ? (
-              <p className="text-sm text-muted-foreground italic">No hourly agreements recorded</p>
+            {section(`Hourly Instructions (${hourlyAgreements.length})`, hourlyAgreements.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">No hourly instructions recorded</p>
             ) : (
               <Table>
                 <TableHeader>

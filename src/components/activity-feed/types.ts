@@ -1,4 +1,4 @@
-export type FormType = 'Issue Report' | 'Hourly Agreement' | 'Sign Off' | 'Quality Report' | 'Invoice';
+export type FormType = 'Issue Report' | 'Hourly Instruction' | 'Sign Off' | 'Quality Report' | 'Invoice';
 
 export type ActivitySourceTable =
   | 'sign_offs'

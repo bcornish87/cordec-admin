@@ -23,7 +23,7 @@ interface RawRow {
 
 const TABLE_CONFIG: { table: ActivityTable; formType: FormType; select: string; hasStatus: boolean; hasSite: boolean; userIdField: string }[] = [
   { table: 'sign_offs',                  formType: 'Sign Off',         select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
-  { table: 'hourly_agreements',          formType: 'Hourly Agreement', select: 'id, user_id, site_id, site_name, plot_name, created_at',         hasStatus: false, hasSite: true,  userIdField: 'user_id' },
+  { table: 'hourly_agreements',          formType: 'Hourly Instruction', select: 'id, user_id, site_id, site_name, plot_name, created_at',       hasStatus: false, hasSite: true,  userIdField: 'user_id' },
   { table: 'invoices',                   formType: 'Invoice',          select: 'id, user_id, status, created_at',                                hasStatus: true,  hasSite: false, userIdField: 'user_id' },
   { table: 'issue_report_submissions',   formType: 'Issue Report',     select: 'id, submitted_by, site_id, site:sites(name), plot:plots(plot_name), created_at', hasStatus: false, hasSite: true,  userIdField: 'submitted_by' },
   { table: 'quality_report_submissions', formType: 'Quality Report',   select: 'id, submitted_by, site_id, site_name, plot_name, created_at',   hasStatus: false, hasSite: true,  userIdField: 'submitted_by' },
