@@ -85,10 +85,20 @@ export default function CustomerCare() {
 
   const stats = useMemo(() => {
     const open = jobs.filter((j) => j.status !== 'completed').length;
-    const overdue = jobs.filter(
-      (j) => j.sla_date && new Date(j.sla_date) < new Date() && j.status !== 'completed',
-    ).length;
+    const overdue = jobs.filter((j) => {
+      if (j.status === 'completed' || !j.date_received) return false;
+      const days = Math.floor((Date.now() - new Date(j.date_received).getTime()) / 86400000);
+      return days > 21;
+    }).length;
     return { total: jobs.length, open, overdue };
+  }, [jobs]);
+
+  const sortedJobs = useMemo(() => {
+    return [...jobs].sort((a, b) => {
+      const ta = a.date_received ? new Date(a.date_received).getTime() : Infinity;
+      const tb = b.date_received ? new Date(b.date_received).getTime() : Infinity;
+      return ta - tb;
+    });
   }, [jobs]);
 
   return (
@@ -171,14 +181,14 @@ export default function CustomerCare() {
                 </TableCell>
               </TableRow>
             )}
-            {!loading && jobs.length === 0 && (
+            {!loading && sortedJobs.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                   No jobs yet. Click "New job" to upload your first PDF.
                 </TableCell>
               </TableRow>
             )}
-            {!loading && jobs.map((j) => (
+            {!loading && sortedJobs.map((j) => (
               <TableRow
                 key={j.id}
                 className="cursor-pointer hover:bg-muted/50"
