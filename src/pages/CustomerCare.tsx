@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'sonner';
-import { ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ExternalLink, Plus, Trash2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,11 +29,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
+  archiveCustomerCareJob,
   deleteCustomerCareJob,
   fetchCustomerCareJobs,
   fetchDeveloperOptions,
   getCustomerCarePdfSignedUrl,
+  unarchiveCustomerCareJob,
   updateCustomerCareJob,
   type CustomerCareJobRow,
   type JobStatus,
@@ -47,8 +50,12 @@ import { UploadDialog } from './customer-care/UploadDialog';
 import { JobDetailDialog } from './customer-care/JobDetailDialog';
 
 const ALL = '__all__';
+const DELETE_CONFIRM = 'delete';
+
+type View = 'active' | 'archive';
 
 export default function CustomerCare() {
+  const [view, setView] = useState<View>('active');
   const [jobs, setJobs] = useState<CustomerCareJobRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<JobStatus | ''>('');
@@ -66,6 +73,7 @@ export default function CustomerCare() {
       const data = await fetchCustomerCareJobs({
         status: statusFilter || null,
         developerId: developerFilter || null,
+        archived: view === 'archive',
       });
       setJobs(data);
     } catch (err) {
@@ -73,7 +81,7 @@ export default function CustomerCare() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, developerFilter]);
+  }, [statusFilter, developerFilter, view]);
 
   useEffect(() => {
     load();
@@ -101,6 +109,8 @@ export default function CustomerCare() {
     });
   }, [jobs]);
 
+  const isArchive = view === 'archive';
+
   return (
     <div className="space-y-6">
       <header className="flex items-start justify-between">
@@ -121,11 +131,20 @@ export default function CustomerCare() {
         />
       </header>
 
-      <div className="flex gap-6 text-sm">
-        <Stat label="Total" value={stats.total} />
-        <Stat label="Open" value={stats.open} />
-        <Stat label="Overdue" value={stats.overdue} tone={stats.overdue > 0 ? 'destructive' : 'default'} />
-      </div>
+      {!isArchive && (
+        <div className="flex gap-6 text-sm">
+          <Stat label="Total" value={stats.total} />
+          <Stat label="Open" value={stats.open} />
+          <Stat label="Overdue" value={stats.overdue} tone={stats.overdue > 0 ? 'destructive' : 'default'} />
+        </div>
+      )}
+
+      <Tabs value={view} onValueChange={(v) => setView(v as View)}>
+        <TabsList>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="archive">Archive</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="flex gap-3 items-end">
         <div className="space-y-1">
@@ -184,7 +203,9 @@ export default function CustomerCare() {
             {!loading && sortedJobs.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                  No jobs yet. Click "New job" to upload your first PDF.
+                  {isArchive
+                    ? 'No archived jobs.'
+                    : 'No jobs yet. Click "New job" to upload your first PDF.'}
                 </TableCell>
               </TableRow>
             )}
@@ -235,15 +256,58 @@ export default function CustomerCare() {
                     >
                       <ExternalLink className="h-4 w-4" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleteJob(j)}
-                      aria-label="Delete job"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {isArchive ? (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                          onClick={async () => {
+                            try {
+                              await unarchiveCustomerCareJob(j.id);
+                              toast.success('Job restored');
+                              load();
+                            } catch (err) {
+                              toast.error(err instanceof Error ? err.message : 'Restore failed');
+                            }
+                          }}
+                          aria-label="Restore job"
+                          title="Restore job"
+                        >
+                          <ArchiveRestore className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteJob(j)}
+                          aria-label="Delete job"
+                          title="Delete permanently"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground disabled:opacity-30"
+                        disabled={j.status !== 'completed'}
+                        onClick={async () => {
+                          try {
+                            await archiveCustomerCareJob(j.id);
+                            toast.success('Job archived');
+                            load();
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'Archive failed');
+                          }
+                        }}
+                        aria-label="Archive job"
+                        title={j.status === 'completed' ? 'Archive job' : 'Mark completed to archive'}
+                      >
+                        <Archive className="h-4 w-4" />
+                      </Button>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -270,7 +334,7 @@ export default function CustomerCare() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete this job?</AlertDialogTitle>
+            <AlertDialogTitle>Delete this job permanently?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteJob && (
                 <>
@@ -283,23 +347,23 @@ export default function CustomerCare() {
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
             <Label htmlFor="delete-confirm" className="text-sm">
-              Type <span className="font-mono font-semibold text-destructive">DELETE</span> to confirm
+              Type <span className="font-mono font-semibold text-destructive">{DELETE_CONFIRM}</span> to confirm
             </Label>
             <Input
               id="delete-confirm"
               autoFocus
               value={deleteConfirm}
               onChange={(e) => setDeleteConfirm(e.target.value)}
-              placeholder="DELETE"
+              placeholder={DELETE_CONFIRM}
             />
           </div>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
-              disabled={deleteConfirm !== 'DELETE'}
+              disabled={deleteConfirm !== DELETE_CONFIRM}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 disabled:pointer-events-none"
               onClick={async () => {
-                if (!deleteJob || deleteConfirm !== 'DELETE') return;
+                if (!deleteJob || deleteConfirm !== DELETE_CONFIRM) return;
                 try {
                   await deleteCustomerCareJob(deleteJob.id);
                   setDeleteJob(null);
@@ -361,4 +425,3 @@ function DaysOpenCell({ received, status }: { received: string | null; status: J
         : '';
   return <span className={tone}>{days}</span>;
 }
-

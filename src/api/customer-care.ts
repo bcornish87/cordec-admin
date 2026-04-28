@@ -46,6 +46,7 @@ export interface CustomerCareJob {
   date_completed: string | null;
   notes: string | null;
   attachment_url: string | null;
+  archived_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -132,6 +133,7 @@ export async function extractCustomerCarePdf(path: string): Promise<ExtractedJob
 export async function fetchCustomerCareJobs(filters: {
   status?: JobStatus | null;
   developerId?: string | null;
+  archived?: boolean;
 } = {}): Promise<CustomerCareJobRow[]> {
   let query = supabase
     .from('customer_care_jobs')
@@ -142,6 +144,12 @@ export async function fetchCustomerCareJobs(filters: {
        customer_care_defects(id)`,
     )
     .order('created_at', { ascending: false });
+
+  if (filters.archived) {
+    query = query.not('archived_at', 'is', null);
+  } else {
+    query = query.is('archived_at', null);
+  }
 
   if (filters.status) query = query.eq('status', filters.status);
   if (filters.developerId) query = query.eq('developer_id', filters.developerId);
@@ -217,11 +225,28 @@ export async function deleteCustomerCareJob(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function archiveCustomerCareJob(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('customer_care_jobs')
+    .update({ archived_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function unarchiveCustomerCareJob(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('customer_care_jobs')
+    .update({ archived_at: null, updated_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
 export async function countOpenCustomerCareJobs(): Promise<number | null> {
   const { count, error } = await supabase
     .from('customer_care_jobs')
     .select('*', { count: 'exact', head: true })
-    .neq('status', 'completed');
+    .neq('status', 'completed')
+    .is('archived_at', null);
   if (error || count == null) return null;
   return count;
 }

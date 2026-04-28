@@ -151,6 +151,7 @@ export type Database = {
         Row: {
           address: string | null
           appointment_date: string | null
+          archived_at: string | null
           assigned_decorator_id: string | null
           attachment_url: string | null
           contact_notes: string | null
@@ -177,6 +178,7 @@ export type Database = {
         Insert: {
           address?: string | null
           appointment_date?: string | null
+          archived_at?: string | null
           assigned_decorator_id?: string | null
           attachment_url?: string | null
           contact_notes?: string | null
@@ -203,6 +205,7 @@ export type Database = {
         Update: {
           address?: string | null
           appointment_date?: string | null
+          archived_at?: string | null
           assigned_decorator_id?: string | null
           attachment_url?: string | null
           contact_notes?: string | null
