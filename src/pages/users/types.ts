@@ -62,7 +62,7 @@ export interface Invoice {
 export type SortKey = 'name' | 'role' | 'rate' | 'last_seen';
 export type SortDir = 'asc' | 'desc';
 
-export const ROLES = ['admin', 'supervisor', 'decorator'] as const;
+export const ROLES = ['admin', 'supervisor', 'decorator', 'trainee'] as const;
 
 export interface PendingUser {
   id: string;
