@@ -45,6 +45,20 @@ export async function getProfileActive(userId: string): Promise<{ is_active: boo
   return data as { is_active: boolean } | null;
 }
 
+/**
+ * Check whether a user has the 'admin' app_role. The admin panel is
+ * admin-only, so this gate runs both on sign-in and on every session load
+ * (to catch cached sessions that predate this restriction).
+ */
+export async function getUserIsAdmin(userId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('has_role', {
+    _user_id: userId,
+    _role: 'admin',
+  });
+  if (error) return false;
+  return data === true;
+}
+
 export async function signOut(): Promise<void> {
   await supabase.auth.signOut();
 }

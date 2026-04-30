@@ -5,6 +5,7 @@ import {
   onAuthStateChange,
   signInWithPassword,
   getProfileActive,
+  getUserIsAdmin,
   signOut as apiSignOut,
 } from '@/api/auth';
 import { touchLastSeen } from '@/api/users';
@@ -36,16 +37,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange((session) => {
-      setSession(session);
+    const acceptSession = async (next: Session | null) => {
+      if (next && !(await getUserIsAdmin(next.user.id))) {
+        await apiSignOut();
+        setSession(null);
+        setLoading(false);
+        return;
+      }
+      setSession(next);
       setLoading(false);
-      if (session) maybeTouchLastSeen();
+      if (next) maybeTouchLastSeen();
+    };
+
+    const unsubscribe = onAuthStateChange((session) => {
+      void acceptSession(session);
     });
 
     getSession().then((session) => {
-      setSession(session);
-      setLoading(false);
-      if (session) maybeTouchLastSeen();
+      void acceptSession(session);
     });
 
     return unsubscribe;
@@ -61,6 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (profile && !profile.is_active) {
       await apiSignOut();
       return { error: new Error('Your account has been deactivated. Please contact your administrator.') };
+    }
+
+    // Admin panel is restricted to users with the 'admin' app_role.
+    const isAdmin = await getUserIsAdmin(data.user.id);
+    if (!isAdmin) {
+      await apiSignOut();
+      return { error: new Error('This account does not have admin access.') };
     }
 
     return { error: null };
